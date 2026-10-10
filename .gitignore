@@ -6,3 +6,7 @@ dist-app/
 
 # Release signing - never commit (backed up to Google Drive)
 .keystore/
+
+# Playwright
+test-results/
+playwright-report/
