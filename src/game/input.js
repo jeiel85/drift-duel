@@ -1,12 +1,16 @@
 // Keyboard + touch controls. The car accelerates on its own (like most mobile
 // drift racers); the player steers, brakes and fires nitro.
-//   Keyboard: ←/A, →/D steer · ↓/S brake · Space/Shift nitro · P/Esc pause
-//   Touch:    hold left/right half to steer · hold both halves to brake · NITRO button
+//   Touch:    hold left/right half to steer · hold both halves to brake
+//             swipe up anywhere or tap NITRO = fire a boost (runs until the tank is empty)
+//   Keyboard: ←/A, →/D steer · ↓/S brake · Space/Shift hold for nitro · P/Esc pause
+
+const SWIPE_UP_PX = 45;
+const SWIPE_MAX_MS = 450;
 
 export function createInput({ touchLayer, nitroButton, onPause }) {
   const keys = new Set();
-  const pointers = new Map(); // pointerId -> 'left' | 'right'
-  let nitroTouch = false;
+  const pointers = new Map(); // pointerId -> { side, y0, t0, swiped }
+  let nitroTaps = 0;
 
   const onKeyDown = (e) => {
     if (e.code === 'KeyP' || e.code === 'Escape') {
@@ -17,53 +21,57 @@ export function createInput({ touchLayer, nitroButton, onPause }) {
     if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Space'].includes(e.code)) e.preventDefault();
   };
   const onKeyUp = (e) => keys.delete(e.code);
-  const onBlur = () => {
+  const clear = () => {
     keys.clear();
     pointers.clear();
-    nitroTouch = false;
+    nitroTaps = 0;
   };
 
   const side = (e) => (e.clientX < window.innerWidth / 2 ? 'left' : 'right');
   const onDown = (e) => {
-    pointers.set(e.pointerId, side(e));
+    pointers.set(e.pointerId, { side: side(e), y0: e.clientY, t0: e.timeStamp, swiped: false });
     touchLayer.setPointerCapture?.(e.pointerId);
     e.preventDefault();
   };
   const onMove = (e) => {
-    if (pointers.has(e.pointerId)) pointers.set(e.pointerId, side(e));
+    const p = pointers.get(e.pointerId);
+    if (!p) return;
+    p.side = side(e);
+    if (!p.swiped && p.y0 - e.clientY > SWIPE_UP_PX && e.timeStamp - p.t0 < SWIPE_MAX_MS) {
+      p.swiped = true;
+      nitroTaps++;
+    }
   };
   const onUp = (e) => pointers.delete(e.pointerId);
 
-  const nitroDown = (e) => {
-    nitroTouch = true;
+  const onNitro = (e) => {
+    nitroTaps++;
     e.preventDefault();
     e.stopPropagation();
-  };
-  const nitroUp = () => {
-    nitroTouch = false;
   };
 
   window.addEventListener('keydown', onKeyDown);
   window.addEventListener('keyup', onKeyUp);
-  window.addEventListener('blur', onBlur);
+  window.addEventListener('blur', clear);
   touchLayer.addEventListener('pointerdown', onDown);
   touchLayer.addEventListener('pointermove', onMove);
   touchLayer.addEventListener('pointerup', onUp);
   touchLayer.addEventListener('pointercancel', onUp);
-  nitroButton.addEventListener('pointerdown', nitroDown);
-  nitroButton.addEventListener('pointerup', nitroUp);
-  nitroButton.addEventListener('pointercancel', nitroUp);
-  nitroButton.addEventListener('pointerleave', nitroUp);
+  nitroButton.addEventListener('pointerdown', onNitro);
 
   return {
+    /**
+     * Current controls. `nitroTap` is true once per tap/swipe (an edge, consumed
+     * by this call); `nitroHeld` is the keyboard hold.
+     */
     read() {
       let left = keys.has('ArrowLeft') || keys.has('KeyA');
       let right = keys.has('ArrowRight') || keys.has('KeyD');
       let brake = keys.has('ArrowDown') || keys.has('KeyS');
       let touchL = false;
       let touchR = false;
-      for (const s of pointers.values()) {
-        if (s === 'left') touchL = true;
+      for (const p of pointers.values()) {
+        if (p.side === 'left') touchL = true;
         else touchR = true;
       }
       if (touchL && touchR) brake = true;
@@ -71,21 +79,22 @@ export function createInput({ touchLayer, nitroButton, onPause }) {
         left ||= touchL;
         right ||= touchR;
       }
-      const steer = (right ? 1 : 0) - (left ? 1 : 0);
-      const nitro = nitroTouch || keys.has('Space') || keys.has('ShiftLeft') || keys.has('ShiftRight');
-      return { steer, throttle: brake ? 0 : 1, brake: brake ? 1 : 0, nitro };
+      const nitroTap = nitroTaps > 0;
+      nitroTaps = 0;
+      return {
+        steer: (right ? 1 : 0) - (left ? 1 : 0),
+        throttle: brake ? 0 : 1,
+        brake: brake ? 1 : 0,
+        nitroHeld: keys.has('Space') || keys.has('ShiftLeft') || keys.has('ShiftRight'),
+        nitroTap,
+      };
     },
     /** Visual feedback for which side is held. */
     sides() {
       const out = { left: false, right: false };
-      for (const s of pointers.values()) out[s] = true;
+      for (const p of pointers.values()) out[p.side] = true;
       return out;
     },
-    reset: onBlur,
-    dispose() {
-      window.removeEventListener('keydown', onKeyDown);
-      window.removeEventListener('keyup', onKeyUp);
-      window.removeEventListener('blur', onBlur);
-    },
+    reset: clear,
   };
 }

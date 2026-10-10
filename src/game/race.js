@@ -1,6 +1,6 @@
 // Race bookkeeping: progress along the track, laps, drift scoring, ranking.
 
-import { collideWithWalls, stepCar } from './physics.js';
+import { collideWithWalls, stepCar, wallAssist } from './physics.js';
 
 const NITRO_PER_SLIP = 0.4;
 const CHAIN_GAP = 0.7; // seconds without sliding before a drift chain is banked
@@ -94,6 +94,7 @@ export function updateProgress(e, track, raceTime, laps) {
 export function stepEntrant(e, input, dt, track, env, raceTime, laps) {
   stepCar(e.car, input, dt, env);
   e.near = track.nearest(e.car.x, e.car.z, e.near.index);
+  if (env.assist) wallAssist(e.car, e.near, track.halfWidth, dt);
   e.impact = collideWithWalls(e.car, e.near, track.halfWidth);
   if (e.impact > 0) e.near = track.nearest(e.car.x, e.car.z, e.near.index);
   updateProgress(e, track, raceTime, laps);

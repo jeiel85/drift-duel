@@ -214,7 +214,7 @@ function buildRain() {
   };
 }
 
-export function buildWorld(scene, track, def) {
+export function buildWorld(scene, track, def, { shadows = true } = {}) {
   const theme = def.theme;
   const group = new THREE.Group();
   scene.add(group);
@@ -224,7 +224,7 @@ export function buildWorld(scene, track, def) {
   const hemi = new THREE.HemisphereLight(theme.hemiSky, theme.hemiGround, theme.hemiIntensity);
   group.add(hemi);
   const sun = new THREE.DirectionalLight(theme.sun, theme.sunIntensity);
-  sun.castShadow = true;
+  sun.castShadow = shadows;
   sun.shadow.mapSize.set(1024, 1024);
   const sc = sun.shadow.camera;
   sc.left = -40;
@@ -311,6 +311,9 @@ export function buildWorld(scene, track, def) {
 
   return {
     bounds: b,
+    setShadows(on) {
+      sun.castShadow = on;
+    },
     /** Keep the shadow camera and weather centered on the focus point. */
     update(dt, focus) {
       sun.position.set(focus.x + 30, 60, focus.z + 20);

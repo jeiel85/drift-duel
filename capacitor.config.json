@@ -1,0 +1,8 @@
+{
+  "appId": "io.github.jeiel85.driftduel",
+  "appName": "Drift Duel",
+  "webDir": "dist-app",
+  "android": {
+    "backgroundColor": "#0b0a1f"
+  }
+}

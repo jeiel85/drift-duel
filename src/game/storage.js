@@ -3,7 +3,7 @@
 
 const KEY = 'drift-duel:v1';
 
-const defaults = () => ({ best: {}, wins: 0, hardWins: 0, races: 0, muted: false, last: {} });
+const defaults = () => ({ best: {}, wins: 0, hardWins: 0, races: 0, muted: false, assist: true, haptics: true, last: {} });
 
 export function loadSave() {
   try {

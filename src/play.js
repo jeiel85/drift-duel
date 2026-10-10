@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { botInput, SKILLS } from './game/ai.js';
 import { createAudio } from './game/audio.js';
 import { CARS, carById } from './game/cars.js';
+import { enterFullscreen, haptic, isNative, keepAwake, onBackButton, setHaptics } from './game/device.js';
 import { createInput } from './game/input.js';
 import { damp, wrapAngle } from './game/math.js';
 import { createCar, NITRO_MIN } from './game/physics.js';
@@ -26,7 +27,6 @@ try {
 } catch (err) {
   fatal('이 브라우저나 기기에서 WebGL을 사용할 수 없어요. 최신 Chrome, Safari, Edge에서 다시 열어 주세요.', err);
 }
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -35,7 +35,38 @@ renderer.outputColorSpace = THREE.SRGBColorSpace;
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(62, 1, 0.5, 1500);
 const embedded = new URLSearchParams(location.search).get('embed') === '1';
+const coarse = window.matchMedia('(pointer: coarse)').matches;
 document.body.classList.toggle('embed', embedded);
+document.body.classList.toggle('native', isNative());
+// iOS Safari ignores user-scalable=no; block pinch zoom during play explicitly.
+document.addEventListener('gesturestart', (e) => e.preventDefault());
+
+// Adaptive quality: phones start at a lower pixel ratio, and if the frame rate
+// stays low the game steps down (resolution, then shadows) instead of stuttering.
+const QUALITY = [
+  { ratio: Math.min(window.devicePixelRatio, coarse ? 1.5 : 2), shadows: true },
+  { ratio: Math.min(window.devicePixelRatio, 1), shadows: true },
+  { ratio: Math.min(window.devicePixelRatio, 0.75), shadows: false },
+];
+let quality = 0;
+const perf = { time: 0, frames: 0 };
+function applyQuality() {
+  renderer.setPixelRatio(QUALITY[quality].ratio);
+  resize();
+  session?.world.setShadows(QUALITY[quality].shadows);
+}
+function watchPerformance(dt) {
+  perf.time += dt;
+  perf.frames++;
+  if (perf.time < 2.5) return;
+  const avg = perf.time / perf.frames;
+  perf.time = 0;
+  perf.frames = 0;
+  if (avg > 1 / 40 && quality < QUALITY.length - 1) {
+    quality++;
+    applyQuality();
+  }
+}
 
 function resize() {
   renderer.setSize(window.innerWidth, window.innerHeight, false);
@@ -47,6 +78,7 @@ function resize() {
   document.body.classList.toggle('compact', embedded || window.innerWidth < 600 || window.innerHeight < 560);
 }
 window.addEventListener('resize', resize);
+renderer.setPixelRatio(QUALITY[0].ratio);
 resize();
 
 function fatal(msg, err) {
@@ -70,6 +102,7 @@ if (!SKILLS[sel.skill]) sel.skill = 'normal';
 
 const audio = createAudio();
 audio.setMuted(!!save.muted);
+setHaptics(save.haptics);
 
 const input = createInput({
   touchLayer: $('#touch'),
@@ -95,7 +128,7 @@ function newSession({ attract }) {
   const track = trackFor(def);
   if (!session || session.def.id !== def.id) {
     session?.world.dispose();
-    session = { def, track, world: buildWorld(scene, track, def) };
+    session = { def, track, world: buildWorld(scene, track, def, { shadows: QUALITY[quality].shadows }) };
   }
   for (const m of session.meshes ?? []) {
     scene.remove(m.object);
@@ -130,21 +163,44 @@ function newSession({ attract }) {
     shake: 0,
   });
   snapCamera = true;
+  nitroLatched = false;
 }
 
 // ---------------------------------------------------------------- simulation
 const IDLE = { steer: 0, throttle: 0, brake: 0, nitro: false };
+let nitroLatched = false;
+
+/** Touch nitro is a tap: it latches the boost on until the tank runs dry (tap again to stop). */
+function playerInput(car) {
+  const r = input.read();
+  if (r.nitroTap) {
+    if (nitroLatched) nitroLatched = false;
+    else if (car.nitro >= NITRO_MIN) {
+      nitroLatched = true;
+      haptic(25);
+    } else haptic([8, 40, 8]); // not charged yet
+  }
+  if (nitroLatched && !car.boosting && car.nitro < NITRO_MIN) nitroLatched = false;
+  return { steer: r.steer, throttle: r.throttle, brake: r.brake, nitro: r.nitroHeld || nitroLatched };
+}
 
 function simStep(dt) {
   const s = session;
-  const env = { gripMul: s.def.gripMul };
+  const botEnv = { gripMul: s.def.gripMul };
+  const playerEnv = { gripMul: s.def.gripMul, assist: save.assist };
   for (const e of s.entrants) {
     let inp;
+    const human = e === s.player && !e.isBot && !e.finished;
     if (mode === 'countdown') inp = IDLE;
-    else if (e.isBot || e.finished) inp = botInput(e, s.track, SKILLS[e === s.rival ? sel.skill : 'normal']);
-    else inp = input.read();
-    const ev = stepEntrant(e, inp, dt, s.track, env, s.raceTime, s.laps);
-    if (e === s.player && !s.attract && ev) driftEvent(ev);
+    else if (!human) inp = botInput(e, s.track, SKILLS[e === s.rival ? sel.skill : 'normal']);
+    else inp = playerInput(e.car);
+    const lapsBefore = e.lapsDone;
+    const ev = stepEntrant(e, inp, dt, s.track, human ? playerEnv : botEnv, s.raceTime, s.laps);
+    if (e === s.player && !s.attract) {
+      if (ev) driftEvent(ev);
+      if (e.impact > 6) haptic(Math.min(60, 15 + e.impact * 3));
+      if (e.lapsDone > lapsBefore && !e.finished) haptic(20);
+    }
     if (e === s.player && e.impact > 3) s.shake = Math.min(1, s.shake + e.impact * 0.06);
   }
   if (mode === 'race') {
@@ -235,6 +291,7 @@ function driftEvent(ev) {
   if (ev.type === 'bank') {
     hud.pop.textContent = `+${ev.points.toLocaleString()}`;
     hud.pop.className = 'drift-pop show bank';
+    haptic(12);
   } else {
     hud.pop.textContent = `CRASH −${ev.lost.toLocaleString()}`;
     hud.pop.className = 'drift-pop show crash';
@@ -258,6 +315,7 @@ function updateHud(dt) {
   hud.nitroFill.style.transform = `scaleY(${car.nitro})`;
   hud.nitroBtn.classList.toggle('ready', car.nitro >= NITRO_MIN);
   hud.nitroBtn.classList.toggle('active', car.boosting);
+  hud.nitroBtn.classList.toggle('full', car.nitro >= 0.999);
 
   const d = p.drift;
   if (d.chain > 0) {
@@ -281,6 +339,8 @@ function show(id, on) {
 
 function startRace() {
   audio.start();
+  if (coarse && !embedded) enterFullscreen();
+  keepAwake(true);
   save.last = { track: TRACKS[sel.track].id, car: sel.car, skill: sel.skill };
   writeSave(save);
   newSession({ attract: false });
@@ -293,6 +353,8 @@ function startRace() {
   show('#hud', true);
   document.body.classList.add('racing');
   $('#countdown').hidden = false;
+  // Show the touch guide during the countdown of the first few races.
+  $('#touch-guide').hidden = !(coarse && save.races < 5);
 }
 
 function finishRace() {
@@ -322,6 +384,8 @@ function finishRace() {
   show('#hud', false);
   show('#results', true);
   document.body.classList.remove('racing');
+  keepAwake(false);
+  haptic(won ? [30, 60, 30, 60, 60] : 40);
 }
 
 function pause() {
@@ -347,10 +411,19 @@ function toMenu() {
   show('#hud', false);
   $('#countdown').hidden = true;
   document.body.classList.remove('racing');
+  keepAwake(false);
   renderMenu();
   newSession({ attract: true });
   show('#menu', true);
 }
+
+// Android back button (native app): pause a race, close overlays, then leave.
+onBackButton(() => {
+  if (mode === 'race' || mode === 'countdown') pause();
+  else if (mode === 'paused') resume();
+  else if (mode === 'results') toMenu();
+  else import('@capacitor/app').then(({ App }) => App.exitApp());
+});
 
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) pause();
@@ -390,6 +463,10 @@ function renderMenu() {
     .join('');
 
   $('#btn-mute').textContent = audio.muted ? '🔇' : '🔊';
+  for (const [id, on] of [['#opt-assist', save.assist], ['#opt-haptics', save.haptics]]) {
+    $(id).classList.toggle('on', on);
+    $(id).setAttribute('aria-pressed', String(on));
+  }
 }
 
 $('#track-list').addEventListener('click', (e) => {
@@ -418,6 +495,18 @@ $('#btn-mute').addEventListener('click', () => {
   writeSave(save);
   renderMenu();
 });
+$('#opt-assist').addEventListener('click', () => {
+  save.assist = !save.assist;
+  writeSave(save);
+  renderMenu();
+});
+$('#opt-haptics').addEventListener('click', () => {
+  save.haptics = !save.haptics;
+  setHaptics(save.haptics);
+  writeSave(save);
+  renderMenu();
+  haptic(20);
+});
 $('#btn-start').addEventListener('click', startRace);
 $('#btn-pause').addEventListener('click', pause);
 $('#btn-resume').addEventListener('click', resume);
@@ -426,9 +515,8 @@ $('#btn-quit').addEventListener('click', toMenu);
 $('#btn-again').addEventListener('click', startRace);
 $('#btn-menu').addEventListener('click', toMenu);
 
-const coarse = window.matchMedia('(pointer: coarse)').matches;
 $('#controls-hint').textContent = coarse
-  ? '화면 왼쪽/오른쪽을 누르고 있으면 조향 · 양쪽 동시에 누르면 브레이크 · 드리프트로 NITRO를 채워서 부스트'
+  ? '왼쪽/오른쪽 누르기 = 조향(짧게 탭하면 살짝) · 위로 쓸어올리기 = 니트로 · 양쪽 동시에 = 브레이크'
   : '←/→ 또는 A/D 조향 · ↓ 브레이크 · Space 니트로 · P 일시정지 — 코너에서 꺾으면 드리프트, 드리프트로 니트로 충전';
 
 // ---------------------------------------------------------------- loop
@@ -450,10 +538,14 @@ function frame(now) {
     if (s.countdown <= 0) {
       mode = 'race';
       goTimer = 0.7;
+      haptic(40);
     }
   } else if (goTimer > 0) {
     goTimer -= dt;
-    if (goTimer <= 0) $('#countdown').hidden = true;
+    if (goTimer <= 0) {
+      $('#countdown').hidden = true;
+      $('#touch-guide').hidden = true;
+    }
   }
 
   const running = mode === 'menu' || mode === 'race' || mode === 'results' || mode === 'countdown';
@@ -473,6 +565,7 @@ function frame(now) {
   if (mode !== 'menu') updateHud(dt);
   audio.update(s.player.car, mode === 'race' || mode === 'countdown');
   renderer.render(scene, camera);
+  if (mode === 'race' || mode === 'menu') watchPerformance(dt);
 }
 
 renderMenu();

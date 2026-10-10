@@ -1,0 +1,17 @@
+{
+  "name": "Drift Duel",
+  "short_name": "Drift Duel",
+  "description": "3D drift racing duel — drift to charge nitro and beat the rival.",
+  "lang": "ko",
+  "start_url": "./play.html",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "any",
+  "background_color": "#0b0a1f",
+  "theme_color": "#0b0a1f",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

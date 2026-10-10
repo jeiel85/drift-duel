@@ -6,6 +6,11 @@
     <meta name="theme-color" content="#0b0a1f" />
     <title>Drift Duel — Play</title>
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <link rel="stylesheet" href="./src/play.css" />
   </head>
   <body>
@@ -28,13 +33,19 @@
         <div class="speedo"><b id="hud-speed">0</b><small>km/h</small></div>
         <button id="btn-nitro" class="nitro" aria-label="니트로">
           <span class="nitro-fill" id="nitro-fill"></span>
-          <span class="nitro-label">NITRO</span>
+          <span class="nitro-label">NITRO<small>탭 · ↑스와이프</small></span>
         </button>
         <div class="score"><small>DRIFT</small><b id="hud-drift">0</b></div>
       </div>
     </div>
 
     <div id="countdown" class="countdown" hidden></div>
+
+    <div id="touch-guide" class="touch-guide" hidden aria-hidden="true">
+      <div class="g-left"><b>◀</b>꾹 누르면 왼쪽<small>짧게 탭 = 살짝</small></div>
+      <div class="g-right"><b>▶</b>꾹 누르면 오른쪽<small>짧게 탭 = 살짝</small></div>
+      <div class="g-mid"><b>↑</b>위로 쓸어올리기 = 니트로<small>양쪽 동시에 누르기 = 브레이크</small></div>
+    </div>
 
     <section id="menu" class="overlay">
       <div class="panel">
@@ -48,6 +59,14 @@
         <div class="cards cars full-only" id="car-list"></div>
         <h2 class="full-only">라이벌 난이도</h2>
         <div class="segmented full-only" id="skill-list"></div>
+        <div class="toggles full-only">
+          <button class="toggle" id="opt-assist" type="button" aria-pressed="true">
+            <b>주행 보조</b><small>스핀·벽 충돌 방지</small>
+          </button>
+          <button class="toggle" id="opt-haptics" type="button" aria-pressed="true">
+            <b>진동</b><small>충돌·드리프트·니트로</small>
+          </button>
+        </div>
         <button class="cta" id="btn-start">레이스 시작</button>
         <p class="hint" id="controls-hint"></p>
         <a class="back" href="./">← 소개 페이지</a>
