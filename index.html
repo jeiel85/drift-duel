@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0b0a1f" />
+    <title>Drift Duel — 브라우저 3D 드리프트 레이싱</title>
+    <meta name="description" content="설치 없이 모바일·PC 브라우저에서 바로 즐기는 3D 드리프트 레이싱 1:1 대결 게임. 드리프트로 니트로를 모아 AI 라이벌을 꺾어 보세요." />
+    <meta property="og:title" content="Drift Duel — 브라우저 3D 드리프트 레이싱" />
+    <meta property="og:description" content="코너에서 미끄러지고, 니트로를 모으고, 라이벌을 꺾어라. 설치 없이 바로 플레이." />
+    <meta property="og:type" content="website" />
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="./src/landing.css" />
+  </head>
+  <body>
+    <nav class="nav">
+      <a class="logo" href="./">DRIFT<i>DUEL</i></a>
+      <a class="nav-link" href="https://github.com/jeiel85/drift-duel" target="_blank" rel="noopener">GitHub ↗</a>
+    </nav>
+
+    <header class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">무료 · 설치 없음 · 모바일 & PC</p>
+        <h1>코너에서 미끄러지고,<br />니트로를 모으고,<br /><span>라이벌을 꺾어라.</span></h1>
+        <p class="lead">
+          Drift Duel은 브라우저에서 바로 하는 3D 드리프트 레이싱 대결 게임이에요. 차가 알아서 달리니까
+          좌우 조향만 신경 쓰면 돼요. 드리프트로 니트로를 채워서 결정적인 순간에 터뜨리세요.
+        </p>
+        <div class="actions">
+          <a class="cta" href="./play.html">▶ 지금 플레이</a>
+          <a class="ghost" href="https://github.com/jeiel85/drift-duel" target="_blank" rel="noopener">소스 코드 보기</a>
+        </div>
+      </div>
+
+      <div class="device" id="demo">
+        <div class="screen">
+          <button class="demo-start" id="demo-start" type="button">
+            <span class="play-icon">▶</span>
+            <span>라이브 데모 실행</span>
+            <small>이 자리에서 바로 플레이할 수 있어요</small>
+          </button>
+        </div>
+        <a class="demo-full" href="./play.html">전체 화면으로 열기 ↗</a>
+      </div>
+    </header>
+
+    <section class="features">
+      <h2>무엇을 할 수 있나요</h2>
+      <div class="grid">
+        <article>
+          <b>🌀 진짜 같은 드리프트</b>
+          <p>속도를 낸 채 크게 꺾으면 뒤가 미끄러지기 시작해요. 횡그립과 오버스티어를 계산하는 자체 물리 모델이에요.</p>
+        </article>
+        <article>
+          <b>⚡ 니트로 & 콤보</b>
+          <p>미끄러진 각도와 속도만큼 점수와 니트로가 쌓여요. 오래 이어 갈수록 배율이 ×4까지 올라가지만, 벽에 박으면 콤보가 날아가요.</p>
+        </article>
+        <article>
+          <b>🤖 AI 라이벌 3단계</b>
+          <p>라이벌은 플레이어와 똑같은 물리로 달려요. Easy, Normal, Hard 중에서 고를 수 있고, Hard에서 이기면 슈퍼카가 열려요.</p>
+        </article>
+        <article>
+          <b>🗺️ 트랙 3종</b>
+          <p>석양의 항구, 붉은 협곡, 그리고 그립이 10% 떨어지는 네온 빗길까지. 트랙마다 최고 기록이 저장돼요.</p>
+        </article>
+        <article>
+          <b>🏎️ 자동차 4종</b>
+          <p>밸런스형 Street, 최고속 Muscle, 접지력 좋은 Off-Road, 해금하는 Super. 차마다 핸들링 성격이 달라요.</p>
+        </article>
+        <article>
+          <b>📱 터치에 맞춘 조작</b>
+          <p>화면 왼쪽과 오른쪽을 누르면 조향, 양쪽을 같이 누르면 브레이크예요. 이미지 파일 없이 전부 코드로 그려서 가볍게 열려요.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="how">
+      <h2>조작법</h2>
+      <div class="how-grid">
+        <div>
+          <h3>모바일</h3>
+          <ul>
+            <li><kbd>왼쪽 절반</kbd> / <kbd>오른쪽 절반</kbd> 누르고 있기 — 조향</li>
+            <li><kbd>양쪽 동시에</kbd> — 브레이크 / 후진</li>
+            <li><kbd>NITRO</kbd> 버튼 누르고 있기 — 부스트</li>
+          </ul>
+        </div>
+        <div>
+          <h3>키보드</h3>
+          <ul>
+            <li><kbd>←</kbd> <kbd>→</kbd> 또는 <kbd>A</kbd> <kbd>D</kbd> — 조향</li>
+            <li><kbd>↓</kbd> 또는 <kbd>S</kbd> — 브레이크 / 후진</li>
+            <li><kbd>Space</kbd> 또는 <kbd>Shift</kbd> — 니트로</li>
+            <li><kbd>P</kbd> 또는 <kbd>Esc</kbd> — 일시정지</li>
+          </ul>
+        </div>
+      </div>
+      <p class="tip">팁: 코너 입구에서 일찍 꺾어 드리프트를 시작하고, 출구에서 조향을 풀면 차가 다시 그립을 잡아요. 니트로는 직선에서 쓰세요.</p>
+    </section>
+
+    <section class="tech">
+      <h2>만든 방법</h2>
+      <ul class="chips">
+        <li>Three.js 렌더링</li>
+        <li>바닐라 JavaScript (ES Modules)</li>
+        <li>Vite 빌드</li>
+        <li>Vitest 물리·AI·트랙 테스트</li>
+        <li>절차적 텍스처 · 이미지 에셋 0개</li>
+        <li>Web Audio 합성 엔진음</li>
+        <li>GitHub Pages 자동 배포</li>
+      </ul>
+    </section>
+
+    <footer class="footer">
+      <p>MIT License · <a href="https://github.com/jeiel85/drift-duel" target="_blank" rel="noopener">github.com/jeiel85/drift-duel</a></p>
+      <p class="disclaimer">모바일 드리프트 레이싱 장르에서 영감을 받은 개인 프로젝트이며, 특정 상용 게임과는 관련이 없어요.</p>
+    </footer>
+
+    <script type="module" src="./src/landing.js"></script>
+  </body>
+</html>
