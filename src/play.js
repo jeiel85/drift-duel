@@ -3,6 +3,7 @@ import { botInput, SKILLS } from './game/ai.js';
 import { createAudio } from './game/audio.js';
 import { CARS, carById } from './game/cars.js';
 import { enterFullscreen, haptic, isNative, keepAwake, onBackButton, setHaptics } from './game/device.js';
+import { buildReportUrl, createErrorLog } from './game/errors.js';
 import { createInput } from './game/input.js';
 import { damp, wrapAngle } from './game/math.js';
 import { createCar, NITRO_MIN } from './game/physics.js';
@@ -19,6 +20,10 @@ const FIXED_DT = 1 / 120;
 const RIVAL_COLOR = 0xf72585;
 const COUNTDOWN = 3;
 
+// Runtime errors are kept on the device; the player can file them from the error screen.
+const errorLog = createErrorLog();
+errorLog.listen();
+
 // ---------------------------------------------------------------- renderer
 const canvas = $('#scene');
 let renderer;
@@ -28,7 +33,7 @@ try {
   fatal('이 브라우저나 기기에서 WebGL을 사용할 수 없어요. 최신 Chrome, Safari, Edge에서 다시 열어 주세요.', err);
 }
 renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.shadowMap.type = THREE.PCFShadowMap; // PCFSoftShadowMap was removed in three r18x
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 
@@ -81,10 +86,31 @@ window.addEventListener('resize', resize);
 renderer.setPixelRatio(QUALITY[0].ratio);
 resize();
 
-function fatal(msg, err) {
+/** What the player was doing, for bug reports. Safe to call before state exists. */
+function reportContext() {
+  try {
+    return { 화면: mode, 트랙: TRACKS[sel.track]?.id, 차: sel.car, 라이벌: sel.skill, 화질단계: quality };
+  } catch {
+    return { 화면: 'startup' };
+  }
+}
+
+function showError(title, msg, err) {
+  if (err) errorLog.record('fatal', err);
+  $('#error-title').textContent = title;
   $('#error-msg').textContent = msg;
+  $('#btn-report').href = buildReportUrl({
+    version: __APP_VERSION__,
+    userAgent: navigator.userAgent,
+    context: reportContext(),
+    entries: errorLog.entries,
+  });
+  for (const id of ['#menu', '#hud', '#pause', '#results', '#gl-lost']) $(id).hidden = true;
   $('#error').hidden = false;
-  $('#menu').hidden = true;
+}
+
+function fatal(msg, err) {
+  showError('실행할 수 없어요', msg, err);
   throw err ?? new Error(msg);
 }
 
@@ -525,13 +551,56 @@ $('#controls-hint').textContent = coarse
   ? '왼쪽/오른쪽 누르기 = 조향(짧게 탭하면 살짝) · 위로 쓸어올리기 = 니트로 · 양쪽 동시에 = 브레이크'
   : '←/→ 또는 A/D 조향 · ↓ 브레이크 · Space 니트로 · P 일시정지 — 코너에서 꺾으면 드리프트, 드리프트로 니트로 충전';
 
+// ---------------------------------------------------------------- WebGL context loss
+// Phones reclaim GPU memory (backgrounding, memory pressure). three.js rebuilds its
+// GL state on restore; until then the game pauses and shows a notice.
+let glLost = false;
+let glReloadTimer = 0;
+canvas.addEventListener('webglcontextlost', (e) => {
+  e.preventDefault(); // tell the browser we will handle restoring
+  glLost = true;
+  errorLog.record('webgl', 'WebGL context lost');
+  pause();
+  $('#gl-lost').hidden = false;
+  glReloadTimer = setTimeout(() => ($('#btn-gl-reload').hidden = false), 5000);
+});
+canvas.addEventListener('webglcontextrestored', () => {
+  glLost = false;
+  clearTimeout(glReloadTimer);
+  $('#gl-lost').hidden = true;
+  $('#btn-gl-reload').hidden = true;
+  applyQuality();
+  snapCamera = true;
+});
+$('#btn-gl-reload').addEventListener('click', () => location.reload());
+$('#btn-reload').addEventListener('click', () => location.reload());
+
 // ---------------------------------------------------------------- loop
 let last = performance.now();
 let acc = 0;
 let goTimer = 0;
+let crashed = false;
 
 function frame(now) {
+  if (crashed) return;
   requestAnimationFrame(frame);
+  if (glLost) {
+    last = now;
+    return;
+  }
+  try {
+    tick(now);
+  } catch (err) {
+    // Stop instead of throwing every frame; offer a restart and a bug report.
+    crashed = true;
+    errorLog.record('frame', err);
+    audio.suspend();
+    keepAwake(false);
+    showError('문제가 생겨 멈췄어요', '게임 진행 중 오류가 발생했어요. 다시 시작하거나, 신고해 주시면 고칠게요.');
+  }
+}
+
+function tick(now) {
   const dt = Math.min((now - last) / 1000, 0.1);
   last = now;
   const time = now / 1000;
@@ -588,6 +657,7 @@ if (import.meta.env.DEV) {
     get session() {
       return session;
     },
+    renderer,
   };
 }
 requestAnimationFrame(frame);
