@@ -200,6 +200,12 @@ function simStep(dt) {
       if (ev) driftEvent(ev);
       if (e.impact > 6) haptic(Math.min(60, 15 + e.impact * 3));
       if (e.lapsDone > lapsBefore && !e.finished) haptic(20);
+      if (e.respawned) {
+        hud.pop.textContent = '트랙으로 복귀';
+        hud.pop.className = 'drift-pop show reset';
+        popTimer = 1.2;
+        haptic(30);
+      }
     }
     if (e === s.player && e.impact > 3) s.shake = Math.min(1, s.shake + e.impact * 0.06);
   }

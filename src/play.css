@@ -163,6 +163,10 @@ body.racing #touch {
 .drift-pop.crash {
   color: var(--accent);
 }
+.drift-pop.reset {
+  color: var(--accent-2);
+  font-size: clamp(18px, 5vw, 30px);
+}
 .hud-bottom {
   margin-top: auto;
   display: flex;
