@@ -64,9 +64,13 @@ jobs:
 
       - name: Verify the APK is signed with the release key
         run: |
-          APKSIGNER=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
-          ACTUAL=$("$APKSIGNER" verify --print-certs android/app/build/outputs/apk/release/app-release.apk \
-            | sed -n 's/^Signer #1 certificate SHA-256 digest: //p')
+          set -o pipefail
+          # Prefer the build-tools release AGP used (35.x); fall back to the newest installed.
+          APKSIGNER=$(ls "$ANDROID_HOME"/build-tools/35.*/apksigner 2>/dev/null | sort -V | tail -1)
+          [ -n "$APKSIGNER" ] || APKSIGNER=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
+          echo "using $APKSIGNER"
+          OUT=$("$APKSIGNER" verify --print-certs android/app/build/outputs/apk/release/app-release.apk 2>&1) || { echo "$OUT"; exit 1; }
+          ACTUAL=$(printf '%s\n' "$OUT" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p')
           echo "certificate SHA-256: $ACTUAL"
           [ "$ACTUAL" = "$EXPECTED_CERT_SHA256" ] || { echo "::error::APK signed with an unexpected certificate"; exit 1; }
 
