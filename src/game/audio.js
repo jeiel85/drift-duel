@@ -1,5 +1,7 @@
 // Tiny synthesized engine + tire screech with Web Audio (no sound files).
 // Browsers only allow audio after a user gesture, so start() is called from a click.
+// iOS can also suspend or "interrupt" a running context (calls, Siri, lock screen)
+// and refuse resume() outside a gesture, so resuming is retried on later taps.
 
 export function createAudio() {
   let ctx = null;
@@ -11,15 +13,35 @@ export function createAudio() {
   let screechGain;
   let screechFilter;
   let muted = false;
+  let wanted = false; // the game wants sound running (racing, not paused)
+  let unavailable = false;
+
+  function resumeIfNeeded() {
+    if (!ctx || !wanted || ctx.state === 'running' || ctx.state === 'closed') return;
+    // Rejected when not allowed yet (no gesture); the next tap or key press retries.
+    ctx.resume().catch(() => {});
+  }
 
   function start() {
+    wanted = true;
     if (ctx) {
-      if (ctx.state === 'suspended') ctx.resume();
+      resumeIfNeeded();
       return;
     }
+    if (unavailable) return;
     const AC = window.AudioContext || window.webkitAudioContext;
-    if (!AC) return; // no Web Audio: play silently
-    ctx = new AC();
+    if (!AC) {
+      unavailable = true; // no Web Audio: play silently
+      return;
+    }
+    try {
+      ctx = new AC();
+    } catch {
+      unavailable = true; // e.g. too many contexts or blocked by policy
+      return;
+    }
+    for (const type of ['pointerdown', 'keydown']) document.addEventListener(type, resumeIfNeeded, { capture: true, passive: true });
+    document.addEventListener('visibilitychange', () => document.hidden || resumeIfNeeded());
     master = ctx.createGain();
     master.gain.value = muted ? 0 : 0.5;
     master.connect(ctx.destination);
@@ -80,8 +102,21 @@ export function createAudio() {
   }
 
   function suspend() {
-    ctx?.suspend();
+    wanted = false;
+    if (ctx && ctx.state === 'running') ctx.suspend().catch(() => {});
   }
 
-  return { start, update, setMuted, suspend, get muted() { return muted; } };
+  return {
+    start,
+    update,
+    setMuted,
+    suspend,
+    get muted() {
+      return muted;
+    },
+    /** 'running' | 'suspended' | 'interrupted' | 'closed' | 'unavailable' | 'idle' */
+    get state() {
+      return unavailable ? 'unavailable' : ctx ? ctx.state : 'idle';
+    },
+  };
 }
