@@ -23,6 +23,8 @@ const COUNTDOWN = 3;
 // Runtime errors are kept on the device; the player can file them from the error screen.
 const errorLog = createErrorLog();
 errorLog.listen();
+// Wired before anything can fail, so the error screen's restart works even if startup aborts.
+$('#btn-reload').addEventListener('click', () => location.reload());
 
 // ---------------------------------------------------------------- renderer
 const canvas = $('#scene');
@@ -573,7 +575,6 @@ canvas.addEventListener('webglcontextrestored', () => {
   snapCamera = true;
 });
 $('#btn-gl-reload').addEventListener('click', () => location.reload());
-$('#btn-reload').addEventListener('click', () => location.reload());
 
 // ---------------------------------------------------------------- loop
 let last = performance.now();

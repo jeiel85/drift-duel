@@ -39,6 +39,29 @@ test('a crash in the game loop stops cleanly and offers a pre-filled bug report'
   // The auto pageErrors fixture also asserts the error was caught, not thrown every frame.
 });
 
+test('without WebGL the player gets a working error screen', async ({ page, pageErrors }) => {
+  // Simulate a browser/device where WebGL cannot be created.
+  await page.addInitScript(() => {
+    const original = HTMLCanvasElement.prototype.getContext;
+    HTMLCanvasElement.prototype.getContext = function (type, ...rest) {
+      return /webgl/i.test(type) ? null : original.call(this, type, ...rest);
+    };
+  });
+  await page.goto('play.html');
+  await expect(page.locator('#error')).toBeVisible();
+  await expect(page.locator('#error-title')).toHaveText('실행할 수 없어요');
+  await expect(page.locator('#menu')).toBeHidden();
+  const report = new URL(await page.locator('#btn-report').getAttribute('href'));
+  expect(report.searchParams.get('body')).toContain('화면: startup');
+
+  // "다시 시작" must actually reload even though startup aborted.
+  const reloaded = page.waitForEvent('framenavigated');
+  await page.locator('#btn-reload').click();
+  await reloaded;
+  // The startup failure is thrown on purpose (uncaught) after showing the screen.
+  pageErrors.splice(0, pageErrors.length, ...pageErrors.filter((e) => !/WebGL/i.test(e)));
+});
+
 test('a corrupted save does not break the menu', async ({ page }) => {
   await page.goto('play.html');
   await page.evaluate(() =>
