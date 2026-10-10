@@ -5,6 +5,8 @@ import { collideWithWalls, stepCar, wallAssist } from './physics.js';
 const NITRO_PER_SLIP = 0.4;
 const CHAIN_GAP = 0.7; // seconds without sliding before a drift chain is banked
 const CRASH_IMPACT = 4; // m/s into a wall that breaks a drift chain
+export const STUCK_SPEED = 2; // m/s — slower than this while driving counts as stuck
+export const STUCK_SECONDS = 2.5; // then the car is put back on the racing line
 
 export function createDriftState() {
   return { chain: 0, chainTime: 0, idle: 0, multiplier: 1, total: 0, best: 0 };
@@ -65,6 +67,8 @@ export function createEntrant(car, track, { name, isBot = false }) {
     finished: false,
     finishTime: null,
     impact: 0,
+    stuck: 0,
+    respawned: false,
     drift: createDriftState(),
   };
 }
@@ -90,13 +94,49 @@ export function updateProgress(e, track, raceTime, laps) {
   }
 }
 
-/** Physics + walls + progress + drift scoring for one entrant. Returns a drift event or null. */
+/** Put the car back on the centerline at its current track position, facing forward. */
+export function respawn(e, track) {
+  const p = track.pointAt(e.near.s, 0);
+  const car = e.car;
+  car.x = p.x;
+  car.z = p.z;
+  car.heading = p.heading;
+  car.vx = 0;
+  car.vz = 0;
+  car.yawRate = 0;
+  car.steer = 0;
+  car.slip = 0;
+  car.speed = 0;
+  car.forwardSpeed = 0;
+  car.drifting = false;
+  car.grip = car.spec.grip;
+  e.near = track.nearest(car.x, car.z, e.near.index);
+  e.stuck = 0;
+}
+
+/**
+ * Physics + walls + progress + drift scoring for one entrant. Returns a drift
+ * event or null; `e.respawned` is true on the step the car was rescued.
+ */
 export function stepEntrant(e, input, dt, track, env, raceTime, laps) {
   stepCar(e.car, input, dt, env);
   e.near = track.nearest(e.car.x, e.car.z, e.near.index);
   if (env.assist) wallAssist(e.car, e.near, track.halfWidth, dt);
   e.impact = collideWithWalls(e.car, e.near, track.halfWidth);
   if (e.impact > 0) e.near = track.nearest(e.car.x, e.car.z, e.near.index);
+
+  // Stuck rescue: only while the driver is actually trying to move (not during
+  // the countdown or when coasting to a stop on purpose).
+  const trying = input.throttle > 0 || input.brake > 0;
+  e.stuck = trying && e.car.speed < STUCK_SPEED ? e.stuck + dt : 0;
+  e.respawned = e.stuck >= STUCK_SECONDS;
+  if (e.respawned) {
+    respawn(e, track);
+    e.drift.chain = 0; // a rescue never banks points
+    e.drift.chainTime = 0;
+    e.drift.multiplier = 1;
+  }
+
   updateProgress(e, track, raceTime, laps);
   return updateDrift(e.drift, e.car, dt, e.impact);
 }
