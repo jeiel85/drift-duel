@@ -132,7 +132,7 @@ export function createSmoke(scene, color = 0xdddddd) {
 /**
  * Wind streaks: short lines fixed in the world around the car's path. The car
  * rushes past them, so they read as speed. They fade in from 60% of top speed
- * and brighten on nitro.
+ * and brighten on nitro and kicks.
  */
 export function createSpeedLines(scene) {
   const N = 90;
@@ -167,7 +167,8 @@ export function createSpeedLines(scene) {
 
   return {
     update(car, pace, enabled, dt) {
-      const strength = enabled ? Math.min(1, Math.max(0, (pace - 0.6) / 0.4)) * 0.35 + (car.boosting ? 0.35 : 0) : 0;
+      const surge = car.boosting ? 0.35 : car.kick > 0 ? 0.2 : 0;
+      const strength = enabled ? Math.min(1, Math.max(0, (pace - 0.6) / 0.4)) * 0.35 + surge : 0;
       mat.opacity += (strength - mat.opacity) * damp(8, dt);
       lines.visible = mat.opacity > 0.01;
       if (!lines.visible) {

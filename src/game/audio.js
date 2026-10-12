@@ -86,7 +86,7 @@ export function createAudio() {
     // Fake 4-speed gearbox so the pitch climbs and drops.
     const gear = Math.min(3, Math.floor(ratio * 4));
     const inGear = ratio * 4 - gear;
-    const freq = 55 + gear * 12 + inGear * 70 + (car.boosting ? 25 : 0);
+    const freq = 55 + gear * 12 + inGear * 70 + (car.boosting ? 25 : car.kick > 0 ? 15 : 0);
     engineOsc.frequency.setTargetAtTime(freq, t, 0.05);
     engineSub.frequency.setTargetAtTime(freq / 2, t, 0.05);
     engineFilter.frequency.setTargetAtTime(400 + ratio * 1400, t, 0.08);

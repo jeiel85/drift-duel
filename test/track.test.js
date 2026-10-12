@@ -31,6 +31,16 @@ describe.each(TRACKS)('track $id', (def) => {
     expect(1 / maxK).toBeGreaterThan(18);
   });
 
+  it('has dash pads, each followed by a long straight', () => {
+    expect(t.pads.length).toBeGreaterThan(0);
+    for (const s of t.pads) {
+      expect(s).toBeGreaterThanOrEqual(0);
+      expect(s).toBeLessThan(t.length);
+      // A pad kick lasts ~1 s plus ~1 s to bleed back: keep ~150 m free of real bends.
+      expect(t.maxCurvature(s, s + 150)).toBeLessThan(1 / 100);
+    }
+  });
+
   it('nearest() recovers arc length and signed lateral offset', () => {
     for (const s of [0, 37.5, t.length / 3, t.length - 1]) {
       for (const lat of [-5, 0, 5]) {

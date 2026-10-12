@@ -1,12 +1,33 @@
 // Race bookkeeping: progress along the track, laps, drift scoring, ranking.
 
-import { collideWithWalls, stepCar, wallAssist } from './physics.js';
+import { collideWithWalls, kick, stepCar, wallAssist } from './physics.js';
 
 const NITRO_PER_SLIP = 0.4;
 const CHAIN_GAP = 0.7; // seconds without sliding before a drift chain is banked
 const CRASH_IMPACT = 4; // m/s into a wall that breaks a drift chain
 export const STUCK_SPEED = 2; // m/s — slower than this while driving counts as stuck
 export const STUCK_SECONDS = 2.5; // then the car is put back on the racing line
+
+// Kicks (see physics.js). Only granted with straight road ahead, so a burst never
+// carries a car with no brake finger (touch auto-throttle) into the next wall.
+export const MINI_KICK = 0.5; // s, for straightening out of a held drift...
+export const MINI_KICK_SPEED = 1.1; // ...a gentler burst, as it comes off every corner
+export const PAD_KICK = 1.0; // s, for driving over a dash pad
+export const PAD_LENGTH = 6; // m along the track
+export const PAD_WIDTH = 0.4; // fraction of the road width, centered
+export const STRAIGHT_K = 1 / 60; // 1/m: gentler than this counts as straight
+export const START_WINDOW = 0.4; // s before "GO" in which a press earns a start boost
+export const START_KICK = 1.2; // s
+
+/** Room for a kick: no bend sharper than STRAIGHT_K in the next 20 m + 1 s of travel. */
+export function straightAhead(track, s, speed) {
+  return track.maxCurvature(s, s + 20 + speed) < STRAIGHT_K;
+}
+
+/** Start boost verdict for a press with `left` seconds of countdown remaining. */
+export function judgeStart(left) {
+  return left <= START_WINDOW ? 'boost' : 'early';
+}
 
 export function createDriftState() {
   return { chain: 0, chainTime: 0, idle: 0, multiplier: 1, total: 0, best: 0 };
@@ -67,6 +88,7 @@ export function createEntrant(car, track, { name, isBot = false }) {
     finished: false,
     finishTime: null,
     impact: 0,
+    kicked: null, // 'mini' | 'pad' on the step a kick was granted
     stuck: 0,
     respawned: false,
     drift: createDriftState(),
@@ -137,8 +159,32 @@ export function stepEntrant(e, input, dt, track, env, raceTime, laps) {
     e.drift.multiplier = 1;
   }
 
+  const lastS = e.lastS;
   updateProgress(e, track, raceTime, laps);
-  return updateDrift(e.drift, e.car, dt, e.impact);
+  e.kicked = null;
+  const car = e.car;
+  if (car.driftExit && straightAhead(track, e.near.s, car.speed)) {
+    kick(car, MINI_KICK, MINI_KICK_SPEED);
+    e.kicked = 'mini';
+  }
+  if (crossedPad(track, lastS, e.near)) {
+    kick(car, PAD_KICK);
+    e.kicked = 'pad';
+  }
+  return updateDrift(e.drift, car, dt, e.impact);
+}
+
+/** True when this step moved forward onto a dash pad, within its width. */
+export function crossedPad(track, lastS, near) {
+  if (Math.abs(near.lateral) > track.halfWidth * PAD_WIDTH) return false;
+  const L = track.length;
+  for (const p of track.pads) {
+    // Distance into the pad now vs. last step, wrapped to (-L/2, L/2].
+    const now = ((near.s - p + L * 1.5) % L) - L / 2;
+    const before = ((lastS - p + L * 1.5) % L) - L / 2;
+    if (now >= 0 && now < PAD_LENGTH && (before < 0 || before >= PAD_LENGTH)) return true;
+  }
+  return false;
 }
 
 /** Finished entrants by finish time first, then everyone else by progress. */

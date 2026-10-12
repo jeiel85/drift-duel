@@ -10,6 +10,14 @@ export const BOOST_SPEED = 1.3;
 export const BOOST_ACCEL = 2.2;
 export const CAR_HALF_WIDTH = 1.0;
 
+// Kicks: short bursts from a drift exit, a dash pad or a start boost. They stack
+// with nitro (up to MAX_SPEED_MUL) and a hard wall hit cancels them.
+export const KICK_SPEED = 1.2; // default speed-cap multiplier while kicking
+export const KICK_ACCEL = 2.6;
+export const MAX_SPEED_MUL = 1.45;
+export const KICK_CANCEL_IMPACT = 4; // m/s into a wall
+export const MINI_DRIFT = 0.6; // s a drift must last before its exit counts
+
 // Driving assist (on by default for touch): forgiving steering for on/off thumb input.
 export const ASSIST_SLIP_CAP = 0.6; // rad — slides never get wider than this, so no spin-outs
 export const ASSIST_STEER_IN = 0.6; // steer ramps in slower: a tap is a small correction...
@@ -27,12 +35,22 @@ export function createCar(spec, x, z, heading) {
     yawRate: 0,
     grip: spec.grip,
     drifting: false,
+    driftTime: 0, // seconds into the current drift
     boosting: false,
+    kick: 0, // seconds of kick left
+    kickSpeed: 1, // speed-cap multiplier of the current kick
+    driftExit: false, // true on the step a held drift ended by straightening out
     nitro: 0,
     speed: 0, // |v| m/s
     forwardSpeed: 0,
     slip: 0, // signed slip angle (rad), positive = sliding to the right
   };
+}
+
+/** Start (or extend) a kick lasting `seconds`; the stronger of overlapping kicks wins. */
+export function kick(car, seconds, speed = KICK_SPEED) {
+  car.kickSpeed = car.kick > 0 ? Math.max(car.kickSpeed, speed) : speed;
+  car.kick = Math.max(car.kick, seconds);
 }
 
 /**
@@ -61,8 +79,14 @@ export function stepCar(car, input, dt, env = {}) {
   // Drift state: hard steering at speed breaks traction; it ends once the
   // driver straightens up and the slide has mostly settled.
   const slipNow = Math.abs(Math.atan2(vl, Math.max(Math.abs(vf), 1)));
+  car.driftExit = false;
   if (Math.abs(car.steer) > 0.4 && vf > spec.maxSpeed * 0.4) car.drifting = true;
-  else if (car.drifting && ((Math.abs(car.steer) < 0.2 && (slipNow < 0.12 || env.assist)) || vf < 8)) car.drifting = false;
+  else if (car.drifting && ((Math.abs(car.steer) < 0.2 && (slipNow < 0.12 || env.assist)) || vf < 8)) {
+    car.drifting = false;
+    // Straightening out of a held drift (not stalling in one); race.js may reward it.
+    car.driftExit = car.driftTime >= MINI_DRIFT && vf >= 8;
+  }
+  car.driftTime = car.drifting ? car.driftTime + dt : 0;
 
   const targetGrip = (car.drifting ? spec.driftGrip : spec.grip) * gripMul;
   const recover = env.assist && steerTarget === 0 ? 20 : 8;
@@ -77,8 +101,11 @@ export function stepCar(car, input, dt, env = {}) {
       car.boosting = false;
     }
   }
-  const maxSpeed = spec.maxSpeed * (car.boosting ? BOOST_SPEED : 1);
-  const accel = spec.accel * (car.boosting ? BOOST_ACCEL : 1);
+  const kicking = car.kick > 0;
+  if (kicking) car.kick = Math.max(0, car.kick - dt);
+  const speedMul = Math.min(MAX_SPEED_MUL, 1 + (car.boosting ? BOOST_SPEED - 1 : 0) + (kicking ? car.kickSpeed - 1 : 0));
+  const maxSpeed = spec.maxSpeed * speedMul;
+  const accel = spec.accel * Math.max(car.boosting ? BOOST_ACCEL : 1, kicking ? KICK_ACCEL : 1);
 
   // Longitudinal
   const throttle = clamp(input.throttle, 0, 1);
@@ -156,6 +183,7 @@ export function collideWithWalls(car, near, halfWidth) {
   car.vx *= scrub;
   car.vz *= scrub;
   car.yawRate *= 0.4;
+  if (vOut > KICK_CANCEL_IMPACT) car.kick = 0;
 
   // Glance the nose along the wall so the car does not stay pinned.
   const along = Math.atan2(near.tz, near.tx);

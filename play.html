@@ -15,6 +15,7 @@
   </head>
   <body>
     <canvas id="scene"></canvas>
+    <canvas id="speed-fx" hidden aria-hidden="true"></canvas>
     <div id="touch" aria-hidden="true">
       <div class="zone left"><span>◀</span></div>
       <div class="zone right"><span>▶</span></div>
@@ -29,6 +30,7 @@
       </div>
       <div id="hud-gap" class="gap"></div>
       <div id="drift-pop" class="drift-pop"></div>
+      <div id="boost-pop" class="boost-pop"></div>
       <div class="hud-bottom">
         <div class="speedo"><b id="hud-speed">0</b><small>km/h</small></div>
         <button id="btn-nitro" class="nitro" aria-label="니트로">
@@ -44,7 +46,7 @@
     <div id="touch-guide" class="touch-guide" hidden aria-hidden="true">
       <div class="g-left"><b>◀</b>꾹 누르면 왼쪽<small>짧게 탭 = 살짝</small></div>
       <div class="g-right"><b>▶</b>꾹 누르면 오른쪽<small>짧게 탭 = 살짝</small></div>
-      <div class="g-mid"><b>↑</b>위로 쓸어올리기 = 니트로<small>양쪽 동시에 누르기 = 브레이크</small></div>
+      <div class="g-mid"><b>↑</b>위로 쓸어올리기 = 니트로<small>양쪽 동시에 누르기 = 브레이크 · GO 직전에 터치 = 출발 부스터</small></div>
     </div>
 
     <section id="menu" class="overlay">

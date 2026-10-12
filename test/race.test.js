@@ -5,8 +5,12 @@ import { createCar } from '../src/game/physics.js';
 import {
   createDriftState,
   createEntrant,
+  crossedPad,
   gridPosition,
+  judgeStart,
+  PAD_WIDTH,
   rank,
+  START_WINDOW,
   stepEntrant,
   updateDrift,
   updateProgress,
@@ -85,6 +89,52 @@ describe('drift scoring', () => {
     expect(event?.type).toBe('crash');
     expect(d.chain).toBe(0);
     expect(d.total).toBe(0);
+  });
+});
+
+describe('kicks', () => {
+  const track = buildTrack(TRACKS[0]);
+  const pad = track.pads[0];
+
+  it('a dash pad fires once, on entry, near the middle of the road', () => {
+    const edge = track.halfWidth * PAD_WIDTH;
+    expect(crossedPad(track, pad - 0.3, { s: pad + 0.1, lateral: 0 })).toBe(true);
+    expect(crossedPad(track, pad - 0.3, { s: pad + 0.1, lateral: edge - 0.2 })).toBe(true);
+    expect(crossedPad(track, pad - 0.3, { s: pad + 0.1, lateral: edge + 0.5 })).toBe(false);
+    expect(crossedPad(track, pad + 1, { s: pad + 1.3, lateral: 0 })).toBe(false); // already on it
+    expect(crossedPad(track, pad + 1, { s: pad - 0.5, lateral: 0 })).toBe(false); // reversing
+  });
+
+  // A car just straightening out of a long drift at arc length s.
+  const exitingDriftAt = (s) => {
+    const p = track.pointAt(s);
+    const car = createCar(carById('vela'), p.x, p.z, p.heading);
+    car.vx = Math.cos(p.heading) * 30;
+    car.vz = Math.sin(p.heading) * 30;
+    car.drifting = true;
+    car.driftTime = 1;
+    const e = createEntrant(car, track, { name: 'p' });
+    stepEntrant(e, { steer: 0, throttle: 1, brake: 0, nitro: false }, DT, track, {}, 0, 3);
+    return e;
+  };
+
+  it('a drift exit earns a mini kick only with straight road ahead', () => {
+    const straight = exitingDriftAt(pad - 30);
+    expect(straight.kicked).toBe('mini');
+    expect(straight.car.kick).toBeGreaterThan(0);
+    // Just before the tightest bend: no kick to carry the car into the wall.
+    let tight = 0;
+    for (let i = 1; i < track.count; i++) if (Math.abs(track.curvature[i]) > Math.abs(track.curvature[tight])) tight = i;
+    const bend = exitingDriftAt(tight * track.step - 15);
+    expect(bend.kicked).toBe(null);
+    expect(bend.car.kick).toBe(0);
+  });
+
+  it('a start press counts only in the last moment before GO', () => {
+    expect(judgeStart(START_WINDOW)).toBe('boost');
+    expect(judgeStart(0.05)).toBe('boost');
+    expect(judgeStart(START_WINDOW + 0.01)).toBe('early');
+    expect(judgeStart(2)).toBe('early');
   });
 });
 

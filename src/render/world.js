@@ -2,11 +2,13 @@
 // instanced props, lights and weather.
 import * as THREE from 'three';
 import { mulberry32 } from '../game/math.js';
+import { PAD_LENGTH, PAD_WIDTH } from '../game/race.js';
 import {
   asphaltTexture,
   checkerTexture,
   curbTexture,
   groundTexture,
+  padTexture,
   windowsTexture,
 } from './textures.js';
 
@@ -131,6 +133,23 @@ function buildMarkers(group, track, theme) {
       return { color: true };
     }),
   );
+}
+
+/** Dash pads with chevrons that scroll forward. Returns the texture to animate. */
+function buildPads(group, track) {
+  const tex = padTexture();
+  tex.repeat.set(1, PAD_LENGTH / 3);
+  const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false });
+  for (const s of track.pads) {
+    const mid = track.pointAt(s + PAD_LENGTH / 2);
+    const geo = new THREE.PlaneGeometry(track.width * PAD_WIDTH, PAD_LENGTH);
+    geo.rotateX(-Math.PI / 2); // texture +v now points along -z
+    const pad = new THREE.Mesh(geo, mat);
+    pad.position.set(mid.x, 0.05, mid.z);
+    pad.rotation.y = -mid.heading - Math.PI / 2; // turn -z onto the track direction
+    group.add(pad);
+  }
+  return tex;
 }
 
 function buildScenery(group, track, theme, seed) {
@@ -338,6 +357,7 @@ export function buildWorld(scene, track, def, { shadows = true } = {}) {
   group.add(gantry);
 
   buildMarkers(group, track, theme);
+  const padTex = buildPads(group, track);
   buildScenery(group, track, theme, def.seed);
 
   const rain = theme.weather === 'rain' ? buildRain() : null;
@@ -353,6 +373,7 @@ export function buildWorld(scene, track, def, { shadows = true } = {}) {
       sun.position.set(focus.x + 30, 60, focus.z + 20);
       sun.target.position.set(focus.x, 0, focus.z);
       rain?.update(dt, focus);
+      padTex.offset.y -= dt * 2.5; // chevrons stream forward
     },
     dispose() {
       scene.remove(group);
