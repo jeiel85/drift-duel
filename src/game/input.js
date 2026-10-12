@@ -51,6 +51,7 @@ export function createInput({ touchLayer, nitroButton, onPause }) {
 
   const onNitro = (e) => {
     nitroTaps++;
+    presses++; // the button stops propagation, so count it as a screen touch here
     e.preventDefault();
     e.stopPropagation();
   };

@@ -102,7 +102,8 @@ describe('kicks', () => {
     expect(crossedPad(track, pad - 0.3, { s: pad + 0.1, lateral: edge - 0.2 })).toBe(true);
     expect(crossedPad(track, pad - 0.3, { s: pad + 0.1, lateral: edge + 0.5 })).toBe(false);
     expect(crossedPad(track, pad + 1, { s: pad + 1.3, lateral: 0 })).toBe(false); // already on it
-    expect(crossedPad(track, pad + 1, { s: pad - 0.5, lateral: 0 })).toBe(false); // reversing
+    expect(crossedPad(track, pad + 1, { s: pad - 0.5, lateral: 0 })).toBe(false); // reversing off it
+    expect(crossedPad(track, pad + 6.2, { s: pad + 5.9, lateral: 0 })).toBe(false); // reversing onto it
   });
 
   // A car just straightening out of a long drift at arc length s.

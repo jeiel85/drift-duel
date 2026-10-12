@@ -174,7 +174,7 @@ export function stepEntrant(e, input, dt, track, env, raceTime, laps) {
   return updateDrift(e.drift, car, dt, e.impact);
 }
 
-/** True when this step moved forward onto a dash pad, within its width. */
+/** True when this step moved forward onto a dash pad from its start, within its width. */
 export function crossedPad(track, lastS, near) {
   if (Math.abs(near.lateral) > track.halfWidth * PAD_WIDTH) return false;
   const L = track.length;
@@ -182,7 +182,8 @@ export function crossedPad(track, lastS, near) {
     // Distance into the pad now vs. last step, wrapped to (-L/2, L/2].
     const now = ((near.s - p + L * 1.5) % L) - L / 2;
     const before = ((lastS - p + L * 1.5) % L) - L / 2;
-    if (now >= 0 && now < PAD_LENGTH && (before < 0 || before >= PAD_LENGTH)) return true;
+    // Entering from upstream only: backing onto the pad from its far end does not count.
+    if (before < 0 && now >= 0 && now < PAD_LENGTH) return true;
   }
   return false;
 }

@@ -660,6 +660,7 @@ function tick(now) {
       s.start = judgeStart(s.countdown);
       if (s.start === 'early') boostPop('너무 빨라요!', 0, true);
     }
+    input.read(); // drop nitro taps made during the countdown so none fires at GO
     const n = Math.ceil(s.countdown);
     $('#countdown').textContent = n > 0 ? String(n) : 'GO!';
     if (s.countdown <= 0) {
