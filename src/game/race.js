@@ -1,6 +1,6 @@
 // Race bookkeeping: progress along the track, laps, drift scoring, ranking.
 
-import { collideWithWalls, kick, stepCar, wallAssist } from './physics.js';
+import { collideWithWalls, kick, KICK_CANCEL_IMPACT, stepCar, wallAssist } from './physics.js';
 
 const NITRO_PER_SLIP = 0.4;
 const CHAIN_GAP = 0.7; // seconds without sliding before a drift chain is banked
@@ -163,11 +163,13 @@ export function stepEntrant(e, input, dt, track, env, raceTime, laps) {
   updateProgress(e, track, raceTime, laps);
   e.kicked = null;
   const car = e.car;
-  if (car.driftExit && straightAhead(track, e.near.s, car.speed)) {
+  // A hard hit cancels kicks (physics.js); never hand one out on that same step.
+  const crashed = e.impact > KICK_CANCEL_IMPACT;
+  if (!crashed && car.driftExit && straightAhead(track, e.near.s, car.speed)) {
     kick(car, MINI_KICK, MINI_KICK_SPEED);
     e.kicked = 'mini';
   }
-  if (crossedPad(track, lastS, e.near)) {
+  if (!crashed && crossedPad(track, lastS, e.near)) {
     kick(car, PAD_KICK);
     e.kicked = 'pad';
   }

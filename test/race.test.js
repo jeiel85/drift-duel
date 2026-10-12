@@ -106,16 +106,18 @@ describe('kicks', () => {
     expect(crossedPad(track, pad + 6.2, { s: pad + 5.9, lateral: 0 })).toBe(false); // reversing onto it
   });
 
-  // A car just straightening out of a long drift at arc length s.
-  const exitingDriftAt = (s) => {
-    const p = track.pointAt(s);
+  // A car just straightening out of a long drift at arc length s, `lateral` m off center
+  // and moving `outward` m/s toward that side's barrier.
+  const exitingDriftAt = (s, lateral = 0, outward = 0) => {
+    const p = track.pointAt(s, lateral);
     const car = createCar(carById('vela'), p.x, p.z, p.heading);
-    car.vx = Math.cos(p.heading) * 30;
-    car.vz = Math.sin(p.heading) * 30;
+    car.vx = Math.cos(p.heading) * 30 - Math.sin(p.heading) * outward;
+    car.vz = Math.sin(p.heading) * 30 + Math.cos(p.heading) * outward;
     car.drifting = true;
     car.driftTime = 1;
     const e = createEntrant(car, track, { name: 'p' });
-    stepEntrant(e, { steer: 0, throttle: 1, brake: 0, nitro: false }, DT, track, {}, 0, 3);
+    // Assist on, as on touch: the drift ends as soon as the thumb lifts, whatever the slip.
+    stepEntrant(e, { steer: 0, throttle: 1, brake: 0, nitro: false }, DT, track, { assist: true }, 0, 3);
     return e;
   };
 
@@ -129,6 +131,16 @@ describe('kicks', () => {
     const bend = exitingDriftAt(tight * track.step - 15);
     expect(bend.kicked).toBe(null);
     expect(bend.car.kick).toBe(0);
+  });
+
+  it('a drift exit that slams into the wall earns no kick', () => {
+    const atWall = track.halfWidth - 1; // CAR_HALF_WIDTH from the right barrier
+    const slam = exitingDriftAt(pad - 30, atWall, 8);
+    expect(slam.impact).toBeGreaterThan(4);
+    expect(slam.kicked).toBe(null);
+    expect(slam.car.kick).toBe(0);
+    const scrape = exitingDriftAt(pad - 30, atWall, 2);
+    expect(scrape.kicked).toBe('mini');
   });
 
   it('a start press counts only in the last moment before GO', () => {
