@@ -27,11 +27,11 @@ test('tap steers a little, hold steers fully, both halves brake', async ({ page 
   await touch('touchStart', [{ x: 330, y: 600, id: 1 }]);
   await sleep(60);
   const tap = (await playerCar(page)).steer;
-  await sleep(600);
-  const hold = (await playerCar(page)).steer;
-  await touch('touchEnd', []);
   expect(tap).toBeLessThan(0.5);
-  expect(hold).toBeGreaterThan(0.95);
+  // Poll instead of sleeping: on CI's software renderer a frame can take longer
+  // than the 0.1 s step cap, so wall-clock time outruns game time.
+  await expect.poll(async () => (await playerCar(page)).steer, { timeout: 10_000 }).toBeGreaterThan(0.95);
+  await touch('touchEnd', []);
 
   // The full-lock hold may have scrubbed speed on a barrier; brake from speed again.
   await expect.poll(async () => (await playerCar(page)).forwardSpeed, { timeout: 20_000 }).toBeGreaterThan(15);
