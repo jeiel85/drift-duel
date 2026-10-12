@@ -24,9 +24,21 @@ test('tap steers a little, hold steers fully, both halves brake', async ({ page 
   const touch = await touchSession(page);
   await expect.poll(async () => (await playerCar(page)).speed, { timeout: 20_000 }).toBeGreaterThan(15);
 
+  // Record the steering on the first frame that sees the touch. Sleeping a fixed
+  // wall-clock time instead is flaky: on a software renderer frames are slow and
+  // the read can land several frames late.
+  await game(page, () => {
+    window.__firstSteer = null;
+    const watch = () => {
+      const steer = window.__driftDuel.session.player.car.steer;
+      if (steer > 0) window.__firstSteer = steer;
+      else requestAnimationFrame(watch);
+    };
+    requestAnimationFrame(watch);
+  });
   await touch('touchStart', [{ x: 330, y: 600, id: 1 }]);
-  await sleep(60);
-  const tap = (await playerCar(page)).steer;
+  await expect.poll(() => game(page, () => window.__firstSteer)).not.toBeNull();
+  const tap = await game(page, () => window.__firstSteer);
   expect(tap).toBeLessThan(0.5);
   // Poll instead of sleeping: on CI's software renderer a frame can take longer
   // than the 0.1 s step cap, so wall-clock time outruns game time.
