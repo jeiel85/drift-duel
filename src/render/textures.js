@@ -15,7 +15,7 @@ function canvasTexture(w, h, draw) {
   return tex;
 }
 
-/** Asphalt with grain, white edge lines and a dashed center line. v repeats every 16 m. */
+/** Asphalt with grain, white edge lines and a dashed center line. v repeats every 8 m. */
 export function asphaltTexture(base) {
   return canvasTexture(128, 256, (g, w, h) => {
     g.fillStyle = base;
@@ -100,4 +100,25 @@ export function puffTexture() {
   });
   tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
   return tex;
+}
+
+/** Dash pad: glowing chevrons pointing up the texture (+v = direction of travel). */
+export function padTexture() {
+  return canvasTexture(128, 128, (g, w, h) => {
+    g.fillStyle = 'rgba(20, 16, 40, 0.88)';
+    g.fillRect(0, 0, w, h);
+    g.fillStyle = 'rgba(255, 214, 51, 0.9)';
+    g.fillRect(0, 0, 6, h);
+    g.fillRect(w - 6, 0, 6, h);
+    g.lineWidth = 16;
+    g.lineJoin = 'miter';
+    g.strokeStyle = '#ffb400';
+    g.shadowColor = '#fff3a0';
+    g.shadowBlur = 10;
+    g.beginPath();
+    g.moveTo(18, h * 0.82);
+    g.lineTo(w / 2, h * 0.3);
+    g.lineTo(w - 18, h * 0.82);
+    g.stroke();
+  });
 }

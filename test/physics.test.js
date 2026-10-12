@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { CARS, carById } from '../src/game/cars.js';
-import { BOOST_SPEED, collideWithWalls, createCar, NITRO_MIN, stepCar } from '../src/game/physics.js';
+import {
+  BOOST_SPEED,
+  collideWithWalls,
+  createCar,
+  kick,
+  KICK_SPEED,
+  MAX_SPEED_MUL,
+  NITRO_MIN,
+  stepCar,
+} from '../src/game/physics.js';
 
 const DT = 1 / 120;
 const run = (car, input, seconds, env) => {
@@ -77,6 +86,78 @@ describe('stepCar', () => {
       return Math.abs(car.slip);
     };
     expect(slipAfter(0.8)).toBeGreaterThan(slipAfter(1));
+  });
+});
+
+describe('kicks', () => {
+  const cruising = () => {
+    const car = createCar(carById('vela'), 0, 0, 0);
+    run(car, FLOOR_IT, 20);
+    return car;
+  };
+
+  it('lift the speed cap while they last, then bleed back to normal', () => {
+    const car = cruising();
+    const max = car.spec.maxSpeed;
+    kick(car, 1);
+    run(car, FLOOR_IT, 0.9);
+    expect(car.speed).toBeGreaterThan(max);
+    expect(car.speed).toBeLessThanOrEqual(max * KICK_SPEED);
+    run(car, FLOOR_IT, 3);
+    expect(car.kick).toBe(0);
+    expect(car.speed).toBeLessThanOrEqual(max);
+  });
+
+  it('stack with nitro, within the overall cap', () => {
+    const plain = cruising();
+    const kicked = cruising();
+    for (const car of [plain, kicked]) car.nitro = 1;
+    kick(kicked, 2);
+    run(plain, { ...FLOOR_IT, nitro: true }, 1.5);
+    run(kicked, { ...FLOOR_IT, nitro: true }, 1.5);
+    expect(kicked.speed).toBeGreaterThan(plain.speed);
+    expect(kicked.speed).toBeLessThanOrEqual(kicked.spec.maxSpeed * MAX_SPEED_MUL);
+  });
+
+  it('keep the stronger of two overlapping kicks', () => {
+    const car = cruising();
+    kick(car, 1, 1.1);
+    kick(car, 0.5, 1.3);
+    expect(car.kickSpeed).toBe(1.3);
+    expect(car.kick).toBe(1);
+  });
+
+  it('end on a hard wall hit but survive a scrape', () => {
+    const near = { lateral: 10, tx: 1, tz: 0 };
+    const scrape = createCar(carById('vela'), 0, 10, 0);
+    scrape.vx = 30;
+    scrape.vz = 2;
+    kick(scrape, 1);
+    collideWithWalls(scrape, near, 10);
+    expect(scrape.kick).toBe(1);
+    const crash = createCar(carById('vela'), 0, 10, 0);
+    crash.vx = 30;
+    crash.vz = 8;
+    kick(crash, 1);
+    collideWithWalls(crash, near, 10);
+    expect(crash.kick).toBe(0);
+  });
+
+  it('flag the exit of a held drift, not of a brief one', () => {
+    // With assist, as on touch: raw physics would spin out of a long full-lock hold.
+    const env = { assist: true };
+    const exits = (holdSeconds) => {
+      const car = cruising();
+      run(car, { ...FLOOR_IT, steer: 1 }, holdSeconds, env);
+      let flagged = false;
+      for (let t = 0; t < 3; t += DT) {
+        stepCar(car, FLOOR_IT, DT, env);
+        flagged ||= car.driftExit;
+      }
+      return flagged;
+    };
+    expect(exits(1)).toBe(true);
+    expect(exits(0.3)).toBe(false);
   });
 });
 

@@ -1,5 +1,6 @@
-// Pooled skid marks and tire smoke.
+// Pooled skid marks, tire smoke and wind streaks.
 import * as THREE from 'three';
+import { damp } from '../game/math.js';
 import { puffTexture } from './textures.js';
 
 const MAX_MARKS = 1600;
@@ -124,6 +125,91 @@ export function createSmoke(scene, color = 0xdddddd) {
         it.sprite.material.dispose();
       }
       tex.dispose();
+    },
+  };
+}
+
+/**
+ * Wind streaks: short lines fixed in the world around the car's path. The car
+ * rushes past them, so they read as speed. They fade in from 60% of top speed
+ * and brighten on nitro and kicks.
+ */
+export function createSpeedLines(scene) {
+  const N = 90;
+  const AHEAD = 70; // spawn range in front of the car (m)
+  const LANE = 4; // m: no streaks closer than this to the car's line of travel
+  const pos = new Float32Array(N * 6);
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  const mat = new THREE.LineBasicMaterial({
+    color: 0xffffff,
+    transparent: true,
+    opacity: 0,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+  });
+  const lines = new THREE.LineSegments(geo, mat);
+  lines.frustumCulled = false;
+  lines.visible = false;
+  scene.add(lines);
+  const streaks = Array.from({ length: N }, () => ({ x: 0, y: 0, z: 0, live: false }));
+
+  function place(s, car, fx, fz, near) {
+    // Off to the sides, clear of the lane the car and the chase camera travel in.
+    const side = Math.random() < 0.5 ? -1 : 1;
+    const lat = side * (LANE + Math.random() * 10);
+    const fwd = (near ? 0 : AHEAD * 0.3) + Math.random() * AHEAD * (near ? 1 : 0.7);
+    s.x = car.x + fx * fwd - fz * lat;
+    s.z = car.z + fz * fwd + fx * lat;
+    s.y = 0.3 + Math.random() * 4.5;
+    s.live = true;
+  }
+
+  return {
+    update(car, pace, enabled, dt) {
+      const surge = car.boosting ? 0.35 : car.kick > 0 ? 0.2 : 0;
+      const strength = enabled ? Math.min(1, Math.max(0, (pace - 0.6) / 0.4)) * 0.35 + surge : 0;
+      mat.opacity += (strength - mat.opacity) * damp(8, dt);
+      lines.visible = mat.opacity > 0.01;
+      if (!lines.visible) {
+        for (const s of streaks) s.live = false;
+        return;
+      }
+      const speed = Math.max(car.speed, 1);
+      const fx = car.vx / speed;
+      const fz = car.vz / speed;
+      const len = Math.min(9, speed * (car.boosting ? 0.16 : 0.1));
+      for (let i = 0; i < N; i++) {
+        const s = streaks[i];
+        if (!s.live) place(s, car, fx, fz, true);
+        else {
+          const dx = s.x - car.x;
+          const dz = s.z - car.z;
+          const ahead = dx * fx + dz * fz;
+          const lat = Math.abs(dz * fx - dx * fz);
+          // Recycle just after passing the car (before it sweeps across the lens), when far
+          // ahead, or when a turn has swung the car's path onto it.
+          if (ahead < -4 || ahead > AHEAD * 1.5 || lat < LANE - 1) place(s, car, fx, fz, false);
+        }
+        const o = i * 6;
+        pos[o] = s.x;
+        pos[o + 1] = s.y;
+        pos[o + 2] = s.z;
+        pos[o + 3] = s.x - fx * len;
+        pos[o + 4] = s.y;
+        pos[o + 5] = s.z - fz * len;
+      }
+      geo.attributes.position.needsUpdate = true;
+    },
+    clear() {
+      for (const s of streaks) s.live = false;
+      mat.opacity = 0;
+      lines.visible = false;
+    },
+    dispose() {
+      scene.remove(lines);
+      geo.dispose();
+      mat.dispose();
     },
   };
 }

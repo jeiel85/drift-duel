@@ -6,13 +6,14 @@ import { enterFullscreen, haptic, isNative, keepAwake, onBackButton, setHaptics 
 import { buildReportUrl, createErrorLog } from './game/errors.js';
 import { createInput } from './game/input.js';
 import { damp, wrapAngle } from './game/math.js';
-import { createCar, NITRO_MIN } from './game/physics.js';
-import { createEntrant, gridPosition, rank, stepEntrant } from './game/race.js';
+import { createCar, kick, NITRO_MIN } from './game/physics.js';
+import { createEntrant, gridPosition, judgeStart, rank, START_KICK, stepEntrant } from './game/race.js';
 import { isUnlocked, loadSave, recordResult, writeSave } from './game/storage.js';
 import { buildTrack } from './game/track.js';
 import { TRACKS } from './game/tracks.js';
 import { createCarMesh } from './render/carMesh.js';
-import { createSkids, createSmoke } from './render/effects.js';
+import { createSkids, createSmoke, createSpeedLines } from './render/effects.js';
+import { createSpeedOverlay } from './render/speedOverlay.js';
 import { buildWorld } from './render/world.js';
 
 const $ = (sel) => document.querySelector(sel);
@@ -145,6 +146,8 @@ let session = null;
 const trackCache = new Map();
 const skids = createSkids(scene);
 const smoke = createSmoke(scene);
+const speedLines = createSpeedLines(scene);
+const speedOverlay = createSpeedOverlay($('#speed-fx'));
 
 function trackFor(def) {
   if (!trackCache.has(def.id)) trackCache.set(def.id, buildTrack(def));
@@ -164,6 +167,8 @@ function newSession({ attract }) {
   }
   skids.clear();
   smoke.clear();
+  speedLines.clear();
+  speedOverlay.clear();
 
   const spec = carById(sel.car);
   const rivalSpec = { ...spec, id: 'rival', name: 'Rival', color: RIVAL_COLOR, accent: 0x111111 };
@@ -187,11 +192,14 @@ function newSession({ attract }) {
     laps: attract ? Infinity : def.laps,
     raceTime: 0,
     countdown: COUNTDOWN,
+    start: null, // start boost verdict: null | 'boost' | 'early'
     smokeTimer: 0,
     shake: 0,
   });
   snapCamera = true;
   nitroLatched = false;
+  boostTimer = 0;
+  hud.boost.className = 'boost-pop';
 }
 
 // ---------------------------------------------------------------- simulation
@@ -226,6 +234,7 @@ function simStep(dt) {
     const ev = stepEntrant(e, inp, dt, s.track, human ? playerEnv : botEnv, s.raceTime, s.laps);
     if (e === s.player && !s.attract) {
       if (ev) driftEvent(ev);
+      if (e.kicked) boostPop(e.kicked === 'pad' ? '대시!' : '순간 부스터!', e.kicked === 'pad' ? 30 : 15);
       if (e.impact > 6) haptic(Math.min(60, 15 + e.impact * 3));
       if (e.lapsDone > lapsBefore && !e.finished) haptic(20);
       if (e.respawned) {
@@ -248,20 +257,30 @@ const camPos = new THREE.Vector3();
 const camLook = new THREE.Vector3();
 let snapCamera = true;
 
+// Players who ask the OS for less motion get no speed rumble or wind streaks.
+const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
 function updateCamera(car, dt, time) {
   const vdir = car.speed > 3 ? Math.atan2(car.vz, car.vx) : car.heading;
   const dir = car.heading + wrapAngle(vdir - car.heading) * 0.55;
   const portrait = camera.userData.portrait;
-  const dist = (portrait ? 11 : 8.5) + car.speed * 0.07;
-  const height = (portrait ? 5.6 : 3.4) + car.speed * 0.025;
+  // 0 at rest, 1 at top speed (above 1 on nitro or a kick). Drives the speed cues below.
+  const pace = car.speed / car.spec.maxSpeed;
+  const surging = car.boosting || car.kick > 0;
+  // Low and close: the road rushing under the camera sells speed far better than
+  // pulling back, so the chase distance barely grows with speed.
+  const dist = (portrait ? 9.5 : 7) + car.speed * 0.03;
+  const height = (portrait ? 4.8 : 2.8) + car.speed * 0.01;
   const want = new THREE.Vector3(car.x - Math.cos(dir) * dist, height, car.z - Math.sin(dir) * dist);
-  const look = new THREE.Vector3(car.x + Math.cos(car.heading) * 6, 1.2, car.z + Math.sin(car.heading) * 6);
+  const ahead = 6 + car.speed * 0.15;
+  const look = new THREE.Vector3(car.x + Math.cos(car.heading) * ahead, 1.1, car.z + Math.sin(car.heading) * ahead);
   if (snapCamera) {
     camPos.copy(want);
     camLook.copy(look);
     snapCamera = false;
   } else {
-    camPos.lerp(want, damp(6, dt));
+    // A looser follow on a boost lets the car surge away from the camera.
+    camPos.lerp(want, damp(surging ? 4.5 : 6, dt));
     camLook.lerp(look, damp(10, dt));
   }
   camera.position.copy(camPos);
@@ -271,9 +290,15 @@ function updateCamera(car, dt, time) {
     camera.position.y += Math.sin(time * 53) * sh * 0.3;
     session.shake = Math.max(0, sh - dt * 2.5);
   }
+  if (!reducedMotion && pace > 0.5) {
+    // Road rumble that builds toward top speed.
+    const rumble = (pace - 0.5) * (surging ? 0.09 : 0.05);
+    camera.position.y += Math.sin(time * 97) * rumble;
+    camera.position.x += Math.sin(time * 83 + 1.3) * rumble * 0.6;
+  }
   camera.lookAt(camLook);
-  const fov = camera.userData.baseFov + Math.min(car.speed, 50) * 0.22 + (car.boosting ? 10 : 0);
-  camera.fov += (fov - camera.fov) * damp(4, dt);
+  const fov = camera.userData.baseFov + Math.min(pace, 1.4) * 14 + (car.boosting ? 6 : car.kick > 0 ? 4 : 0);
+  camera.fov += (fov - camera.fov) * damp(surging ? 7 : 4, dt);
   camera.updateProjectionMatrix();
 }
 
@@ -298,6 +323,10 @@ function updateEffects(dt) {
     });
   });
   smoke.update(dt);
+  const car = s.player.car;
+  const racing = !reducedMotion && mode !== 'menu';
+  speedLines.update(car, car.speed / car.spec.maxSpeed, racing, dt);
+  speedOverlay.update(racing ? (car.boosting ? 1 : car.kick > 0 ? 0.6 : 0) : 0, dt);
 }
 
 // ---------------------------------------------------------------- HUD
@@ -311,8 +340,19 @@ const hud = {
   nitroFill: $('#nitro-fill'),
   nitroBtn: $('#btn-nitro'),
   pop: $('#drift-pop'),
+  boost: $('#boost-pop'),
+  speedo: $('.speedo'),
 };
 let popTimer = 0;
+let boostTimer = 0;
+
+/** Short callout under the drift counter for kicks and the start boost. */
+function boostPop(text, buzz, miss = false) {
+  hud.boost.textContent = text;
+  hud.boost.className = `boost-pop show${miss ? ' miss' : ''}`;
+  boostTimer = 0.9;
+  if (buzz) haptic(buzz);
+}
 
 function formatTime(t) {
   if (t == null || !isFinite(t)) return '--:--.--';
@@ -342,6 +382,11 @@ function updateHud(dt) {
   hud.lap.textContent = `${Math.min(p.lapsDone + 1, s.laps)}/${s.laps}`;
   hud.time.textContent = formatTime(s.raceTime);
   hud.speed.textContent = Math.round(car.speed * 3.6);
+  hud.speedo.classList.toggle('surge', car.boosting || car.kick > 0);
+  if (boostTimer > 0) {
+    boostTimer -= dt;
+    if (boostTimer <= 0) hud.boost.className = 'boost-pop';
+  }
   hud.drift.textContent = p.drift.total.toLocaleString();
   const gap = p.progress - s.rival.progress;
   hud.gap.textContent = mode === 'race' ? `RIVAL ${gap >= 0 ? '−' : '+'}${Math.abs(gap).toFixed(0)}m` : '';
@@ -550,8 +595,8 @@ $('#btn-again').addEventListener('click', startRace);
 $('#btn-menu').addEventListener('click', toMenu);
 
 $('#controls-hint').textContent = coarse
-  ? '왼쪽/오른쪽 누르기 = 조향(짧게 탭하면 살짝) · 위로 쓸어올리기 = 니트로 · 양쪽 동시에 = 브레이크'
-  : '←/→ 또는 A/D 조향 · ↓ 브레이크 · Space 니트로 · P 일시정지 — 코너에서 꺾으면 드리프트, 드리프트로 니트로 충전';
+  ? '왼쪽/오른쪽 누르기 = 조향(짧게 탭하면 살짝) · 위로 쓸어올리기 = 니트로 · 양쪽 동시에 = 브레이크 · GO 직전 터치 = 출발 부스터 · 드리프트 후 코너를 빠져나오며 손을 떼면 순간 부스터 · 노란 화살표를 밟으면 대시'
+  : '←/→ 또는 A/D 조향 · ↓ 브레이크 · Space 니트로 · P 일시정지 — 코너에서 꺾으면 드리프트, 드리프트로 니트로 충전 · GO 직전 ↑/Space = 출발 부스터 · 드리프트 후 코너를 빠져나오며 핸들을 풀면 순간 부스터 · 노란 화살표를 밟으면 대시';
 
 // ---------------------------------------------------------------- WebGL context loss
 // Phones reclaim GPU memory (backgrounding, memory pressure). three.js rebuilds its
@@ -607,14 +652,25 @@ function tick(now) {
   const time = now / 1000;
   const s = session;
 
+  // Consumed every frame so a stale tap never counts later.
+  const pressed = input.takePress();
   if (mode === 'countdown') {
     s.countdown -= dt;
+    if (pressed && !s.start) {
+      s.start = judgeStart(s.countdown);
+      if (s.start === 'early') boostPop('너무 빨라요!', 0, true);
+    }
+    input.read(); // drop nitro taps made during the countdown so none fires at GO
     const n = Math.ceil(s.countdown);
     $('#countdown').textContent = n > 0 ? String(n) : 'GO!';
     if (s.countdown <= 0) {
       mode = 'race';
       goTimer = 0.7;
       haptic(40);
+      if (s.start === 'boost') {
+        kick(s.player.car, START_KICK);
+        boostPop('출발 부스터!', 40);
+      }
     }
   } else if (goTimer > 0) {
     goTimer -= dt;
@@ -640,6 +696,7 @@ function tick(now) {
   s.world.update(dt, focus);
   if (mode !== 'menu') updateHud(dt);
   audio.update(s.player.car, mode === 'race' || mode === 'countdown');
+  if (!running) speedOverlay.update(0, dt);
   renderer.render(scene, camera);
   if (mode === 'race' || mode === 'menu') watchPerformance(dt);
 }

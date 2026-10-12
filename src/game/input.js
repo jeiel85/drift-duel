@@ -3,6 +3,7 @@
 //   Touch:    hold left/right half to steer · hold both halves to brake
 //             swipe up anywhere or tap NITRO = fire a boost (runs until the tank is empty)
 //   Keyboard: ←/A, →/D steer · ↓/S brake · Space/Shift hold for nitro · P/Esc pause
+//   Start boost: touch the screen or press ↑/W/Space right before "GO"
 
 const SWIPE_UP_PX = 45;
 const SWIPE_MAX_MS = 450;
@@ -11,12 +12,14 @@ export function createInput({ touchLayer, nitroButton, onPause }) {
   const keys = new Set();
   const pointers = new Map(); // pointerId -> { side, y0, t0, swiped }
   let nitroTaps = 0;
+  let presses = 0; // fresh touches / ↑ W Space presses, for the start boost
 
   const onKeyDown = (e) => {
     if (e.code === 'KeyP' || e.code === 'Escape') {
       onPause?.();
       return;
     }
+    if (!e.repeat && ['ArrowUp', 'KeyW', 'Space'].includes(e.code)) presses++;
     keys.add(e.code);
     if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Space'].includes(e.code)) e.preventDefault();
   };
@@ -25,11 +28,13 @@ export function createInput({ touchLayer, nitroButton, onPause }) {
     keys.clear();
     pointers.clear();
     nitroTaps = 0;
+    presses = 0;
   };
 
   const side = (e) => (e.clientX < window.innerWidth / 2 ? 'left' : 'right');
   const onDown = (e) => {
     pointers.set(e.pointerId, { side: side(e), y0: e.clientY, t0: e.timeStamp, swiped: false });
+    presses++;
     touchLayer.setPointerCapture?.(e.pointerId);
     e.preventDefault();
   };
@@ -46,6 +51,7 @@ export function createInput({ touchLayer, nitroButton, onPause }) {
 
   const onNitro = (e) => {
     nitroTaps++;
+    presses++; // the button stops propagation, so count it as a screen touch here
     e.preventDefault();
     e.stopPropagation();
   };
@@ -88,6 +94,12 @@ export function createInput({ touchLayer, nitroButton, onPause }) {
         nitroHeld: keys.has('Space') || keys.has('ShiftLeft') || keys.has('ShiftRight'),
         nitroTap,
       };
+    },
+    /** True once per fresh press since the last call (an edge, consumed here). */
+    takePress() {
+      const pressed = presses > 0;
+      presses = 0;
+      return pressed;
     },
     /** Visual feedback for which side is held. */
     sides() {

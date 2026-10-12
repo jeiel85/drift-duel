@@ -175,6 +175,7 @@ export function buildTrack(def) {
     id: def.id,
     width: def.width,
     halfWidth: def.width / 2,
+    pads: def.pads ?? [],
     length,
     step,
     count,

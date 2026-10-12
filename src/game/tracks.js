@@ -9,6 +9,8 @@ export const TRACKS = [
     width: 20,
     laps: 3,
     seed: 11,
+    // Dash pads (arc length, m). test/track.test.js checks each has a straight runway.
+    pads: [900],
     points: [
       [0, 0], [130, 0], [210, 25], [240, 95], [205, 165], [125, 185],
       [65, 150], [5, 185], [-80, 175], [-125, 105], [-105, 35],
@@ -21,6 +23,7 @@ export const TRACKS = [
       ground: 0x5f8f6b,
       asphalt: '#3b3f47',
       wall: 0xf2f2f2,
+      marker: 0xff6b35,
       wallEmissive: 0x000000,
       sun: 0xffe2c4,
       sunIntensity: 2.6,
@@ -39,6 +42,7 @@ export const TRACKS = [
     width: 18,
     laps: 2,
     seed: 23,
+    pads: [20, 744],
     points: [
       [0, 0], [150, -20], [245, 30], [255, 120], [185, 155], [160, 225],
       [225, 295], [165, 365], [45, 345], [-20, 265], [40, 195], [0, 125], [-60, 70],
@@ -51,6 +55,7 @@ export const TRACKS = [
       ground: 0xc77b47,
       asphalt: '#45403d',
       wall: 0xffd166,
+      marker: 0xffffff,
       wallEmissive: 0x000000,
       sun: 0xfff1d6,
       sunIntensity: 3,
@@ -69,6 +74,7 @@ export const TRACKS = [
     width: 16,
     laps: 2,
     seed: 37,
+    pads: [740],
     points: [
       [0, 0], [100, 0], [165, 40], [155, 105], [90, 115], [62, 165], [112, 215],
       [205, 205], [265, 255], [235, 325], [120, 335], [20, 305], [-40, 235],

@@ -2,16 +2,19 @@
 // instanced props, lights and weather.
 import * as THREE from 'three';
 import { mulberry32 } from '../game/math.js';
+import { PAD_LENGTH, PAD_WIDTH } from '../game/race.js';
 import {
   asphaltTexture,
   checkerTexture,
   curbTexture,
   groundTexture,
+  padTexture,
   windowsTexture,
 } from './textures.js';
 
 const CURB = 1.6;
 const WALL_H = 1.1;
+const MARKER_GAP = 12; // m between roadside marker posts
 
 /** Flat or vertical strip following the centerline between two lateral offsets. */
 function ribbon(track, lat0, lat1, { y0 = 0, y1 = y0, vMeters = 16 } = {}) {
@@ -99,6 +102,55 @@ function instanced(geometry, material, items, place) {
 }
 
 const yaw = (q, a) => q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), a);
+
+/**
+ * Marker posts just outside both barriers. Closely spaced roadside objects are
+ * what make speed readable: open scenery alone barely moves on screen.
+ */
+function buildMarkers(group, track, theme) {
+  const posts = [];
+  const count = Math.round(track.length / MARKER_GAP); // even spacing across the loop seam
+  for (let i = 0; i < count; i++) {
+    for (const side of [-1, 1]) {
+      const pt = track.pointAt((i * track.length) / count, side * (track.halfWidth + CURB + 0.5));
+      posts.push({ x: pt.x, z: pt.z, side });
+    }
+  }
+  group.add(
+    instanced(new THREE.BoxGeometry(0.3, 1.7, 0.3), new THREE.MeshLambertMaterial({ color: theme.wall }), posts, (it, p, q, s) => {
+      p.set(it.x, 0.85, it.z);
+      q.identity();
+      s.set(1, 1, 1);
+    }),
+  );
+  // Bright reflector caps; on the neon track they match the barrier strips.
+  group.add(
+    instanced(new THREE.BoxGeometry(0.36, 0.36, 0.36), new THREE.MeshBasicMaterial(), posts, (it, p, q, s, c) => {
+      p.set(it.x, 1.6, it.z);
+      q.identity();
+      s.set(1, 1, 1);
+      c.setHex(theme.wallEmissive ? (it.side > 0 ? 0x2bf0ff : 0xff2bd6) : theme.marker);
+      return { color: true };
+    }),
+  );
+}
+
+/** Dash pads with chevrons that scroll forward. Returns the texture to animate. */
+function buildPads(group, track) {
+  const tex = padTexture();
+  tex.repeat.set(1, PAD_LENGTH / 3);
+  const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false });
+  for (const s of track.pads) {
+    const mid = track.pointAt(s + PAD_LENGTH / 2);
+    const geo = new THREE.PlaneGeometry(track.width * PAD_WIDTH, PAD_LENGTH);
+    geo.rotateX(-Math.PI / 2); // texture +v now points along -z
+    const pad = new THREE.Mesh(geo, mat);
+    pad.position.set(mid.x, 0.05, mid.z);
+    pad.rotation.y = -mid.heading - Math.PI / 2; // turn -z onto the track direction
+    group.add(pad);
+  }
+  return tex;
+}
 
 function buildScenery(group, track, theme, seed) {
   const rnd = mulberry32(seed);
@@ -249,7 +301,7 @@ export function buildWorld(scene, track, def, { shadows = true } = {}) {
   if (theme.weather === 'rain') {
     roadMat.color = new THREE.Color(0xb8b8d8); // wet sheen tint
   }
-  const road = new THREE.Mesh(ribbon(track, -track.halfWidth, track.halfWidth, { y0: 0.01, vMeters: 16 }), roadMat);
+  const road = new THREE.Mesh(ribbon(track, -track.halfWidth, track.halfWidth, { y0: 0.01, vMeters: 8 }), roadMat);
   road.receiveShadow = true;
   group.add(road);
 
@@ -304,6 +356,8 @@ export function buildWorld(scene, track, def, { shadows = true } = {}) {
   gantry.rotation.y = -start.heading;
   group.add(gantry);
 
+  buildMarkers(group, track, theme);
+  const padTex = buildPads(group, track);
   buildScenery(group, track, theme, def.seed);
 
   const rain = theme.weather === 'rain' ? buildRain() : null;
@@ -319,6 +373,7 @@ export function buildWorld(scene, track, def, { shadows = true } = {}) {
       sun.position.set(focus.x + 30, 60, focus.z + 20);
       sun.target.position.set(focus.x, 0, focus.z);
       rain?.update(dt, focus);
+      padTex.offset.y -= dt * 2.5; // chevrons stream forward
     },
     dispose() {
       scene.remove(group);

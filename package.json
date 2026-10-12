@@ -1,6 +1,6 @@
 {
   "name": "drift-duel",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "description": "Mobile-friendly 3D drift racing duel that runs in the browser",
   "type": "module",
