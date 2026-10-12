@@ -6,8 +6,8 @@ import { approach, clamp, wrapAngle } from './math.js';
 
 export const NITRO_DRAIN = 0.42; // meter per second while boosting
 export const NITRO_MIN = 0.15; // minimum meter to start a boost
-export const BOOST_SPEED = 1.25;
-export const BOOST_ACCEL = 1.7;
+export const BOOST_SPEED = 1.3;
+export const BOOST_ACCEL = 2.2;
 export const CAR_HALF_WIDTH = 1.0;
 
 // Driving assist (on by default for touch): forgiving steering for on/off thumb input.

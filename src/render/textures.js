@@ -15,7 +15,7 @@ function canvasTexture(w, h, draw) {
   return tex;
 }
 
-/** Asphalt with grain, white edge lines and a dashed center line. v repeats every 16 m. */
+/** Asphalt with grain, white edge lines and a dashed center line. v repeats every 8 m. */
 export function asphaltTexture(base) {
   return canvasTexture(128, 256, (g, w, h) => {
     g.fillStyle = base;

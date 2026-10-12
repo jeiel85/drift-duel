@@ -12,7 +12,7 @@ import { isUnlocked, loadSave, recordResult, writeSave } from './game/storage.js
 import { buildTrack } from './game/track.js';
 import { TRACKS } from './game/tracks.js';
 import { createCarMesh } from './render/carMesh.js';
-import { createSkids, createSmoke } from './render/effects.js';
+import { createSkids, createSmoke, createSpeedLines } from './render/effects.js';
 import { buildWorld } from './render/world.js';
 
 const $ = (sel) => document.querySelector(sel);
@@ -145,6 +145,7 @@ let session = null;
 const trackCache = new Map();
 const skids = createSkids(scene);
 const smoke = createSmoke(scene);
+const speedLines = createSpeedLines(scene);
 
 function trackFor(def) {
   if (!trackCache.has(def.id)) trackCache.set(def.id, buildTrack(def));
@@ -164,6 +165,7 @@ function newSession({ attract }) {
   }
   skids.clear();
   smoke.clear();
+  speedLines.clear();
 
   const spec = carById(sel.car);
   const rivalSpec = { ...spec, id: 'rival', name: 'Rival', color: RIVAL_COLOR, accent: 0x111111 };
@@ -248,20 +250,29 @@ const camPos = new THREE.Vector3();
 const camLook = new THREE.Vector3();
 let snapCamera = true;
 
+// Players who ask the OS for less motion get no speed rumble or wind streaks.
+const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
 function updateCamera(car, dt, time) {
   const vdir = car.speed > 3 ? Math.atan2(car.vz, car.vx) : car.heading;
   const dir = car.heading + wrapAngle(vdir - car.heading) * 0.55;
   const portrait = camera.userData.portrait;
-  const dist = (portrait ? 11 : 8.5) + car.speed * 0.07;
-  const height = (portrait ? 5.6 : 3.4) + car.speed * 0.025;
+  // 0 at rest, 1 at top speed (above 1 on nitro). Drives the speed cues below.
+  const pace = car.speed / car.spec.maxSpeed;
+  // Low and close: the road rushing under the camera sells speed far better than
+  // pulling back, so the chase distance barely grows with speed.
+  const dist = (portrait ? 9.5 : 7) + car.speed * 0.03;
+  const height = (portrait ? 4.8 : 2.8) + car.speed * 0.01;
   const want = new THREE.Vector3(car.x - Math.cos(dir) * dist, height, car.z - Math.sin(dir) * dist);
-  const look = new THREE.Vector3(car.x + Math.cos(car.heading) * 6, 1.2, car.z + Math.sin(car.heading) * 6);
+  const ahead = 6 + car.speed * 0.15;
+  const look = new THREE.Vector3(car.x + Math.cos(car.heading) * ahead, 1.1, car.z + Math.sin(car.heading) * ahead);
   if (snapCamera) {
     camPos.copy(want);
     camLook.copy(look);
     snapCamera = false;
   } else {
-    camPos.lerp(want, damp(6, dt));
+    // A looser follow on nitro lets the car surge away from the camera.
+    camPos.lerp(want, damp(car.boosting ? 4.5 : 6, dt));
     camLook.lerp(look, damp(10, dt));
   }
   camera.position.copy(camPos);
@@ -271,9 +282,15 @@ function updateCamera(car, dt, time) {
     camera.position.y += Math.sin(time * 53) * sh * 0.3;
     session.shake = Math.max(0, sh - dt * 2.5);
   }
+  if (!reducedMotion && pace > 0.5) {
+    // Road rumble that builds toward top speed.
+    const rumble = (pace - 0.5) * (car.boosting ? 0.09 : 0.05);
+    camera.position.y += Math.sin(time * 97) * rumble;
+    camera.position.x += Math.sin(time * 83 + 1.3) * rumble * 0.6;
+  }
   camera.lookAt(camLook);
-  const fov = camera.userData.baseFov + Math.min(car.speed, 50) * 0.22 + (car.boosting ? 10 : 0);
-  camera.fov += (fov - camera.fov) * damp(4, dt);
+  const fov = camera.userData.baseFov + Math.min(pace, 1.3) * 14 + (car.boosting ? 6 : 0);
+  camera.fov += (fov - camera.fov) * damp(car.boosting ? 6 : 4, dt);
   camera.updateProjectionMatrix();
 }
 
@@ -298,6 +315,8 @@ function updateEffects(dt) {
     });
   });
   smoke.update(dt);
+  const car = s.player.car;
+  speedLines.update(car, car.speed / car.spec.maxSpeed, !reducedMotion && mode !== 'menu', dt);
 }
 
 // ---------------------------------------------------------------- HUD
