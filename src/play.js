@@ -15,6 +15,7 @@ import { createCarMesh } from './render/carMesh.js';
 import { createSkids, createSmoke, createSpeedLines } from './render/effects.js';
 import { createSpeedOverlay } from './render/speedOverlay.js';
 import { buildWorld } from './render/world.js';
+import { applyStatic, getLang, saveLang, t } from './i18n.js';
 
 const $ = (sel) => document.querySelector(sel);
 const FIXED_DT = 1 / 120;
@@ -23,6 +24,8 @@ const COUNTDOWN = 3;
 
 // Runtime errors are kept on the device; the player can file them from the error screen.
 const errorLog = createErrorLog();
+// Fill the page's text first so even the startup error screen is in the player's language.
+applyStatic();
 errorLog.listen();
 // Wired before anything can fail, so the error screen's restart works even if startup aborts.
 $('#btn-reload').addEventListener('click', () => location.reload());
@@ -33,7 +36,7 @@ let renderer;
 try {
   renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
 } catch (err) {
-  fatal('이 브라우저나 기기에서 WebGL을 사용할 수 없어요. 최신 Chrome, Safari, Edge에서 다시 열어 주세요.', err);
+  fatal(t('err.noWebgl'), err);
 }
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFShadowMap; // PCFSoftShadowMap was removed in three r18x
@@ -92,9 +95,15 @@ resize();
 /** What the player was doing, for bug reports. Safe to call before state exists. */
 function reportContext() {
   try {
-    return { 화면: mode, 트랙: TRACKS[sel.track]?.id, 차: sel.car, 라이벌: sel.skill, 화질단계: quality };
+    return {
+      [t('report.screen')]: mode,
+      [t('report.track')]: TRACKS[sel.track]?.id,
+      [t('report.car')]: sel.car,
+      [t('report.rival')]: sel.skill,
+      [t('report.quality')]: quality,
+    };
   } catch {
-    return { 화면: 'startup' };
+    return { [t('report.screen')]: 'startup' };
   }
 }
 
@@ -113,7 +122,7 @@ function showError(title, msg, err) {
 }
 
 function fatal(msg, err) {
-  showError('실행할 수 없어요', msg, err);
+  showError(t('err.title'), msg, err);
   throw err ?? new Error(msg);
 }
 
@@ -234,11 +243,11 @@ function simStep(dt) {
     const ev = stepEntrant(e, inp, dt, s.track, human ? playerEnv : botEnv, s.raceTime, s.laps);
     if (e === s.player && !s.attract) {
       if (ev) driftEvent(ev);
-      if (e.kicked) boostPop(e.kicked === 'pad' ? '대시!' : '순간 부스터!', e.kicked === 'pad' ? 30 : 15);
+      if (e.kicked) boostPop(e.kicked === 'pad' ? t('pop.pad') : t('pop.kick'), e.kicked === 'pad' ? 30 : 15);
       if (e.impact > 6) haptic(Math.min(60, 15 + e.impact * 3));
       if (e.lapsDone > lapsBefore && !e.finished) haptic(20);
       if (e.respawned) {
-        hud.pop.textContent = '트랙으로 복귀';
+        hud.pop.textContent = t('pop.respawn');
         hud.pop.className = 'drift-pop show reset';
         popTimer = 1.2;
         haptic(30);
@@ -449,15 +458,15 @@ function finishRace() {
   });
   writeSave(save);
 
-  $('#res-title').textContent = won ? '1위! 승리' : `${place}위`;
-  $('#res-sub').textContent = `${s.def.name} · ${carById(sel.car).name} · 라이벌 ${SKILLS[sel.skill].label}`;
+  $('#res-title').textContent = won ? t('res.win') : t('res.place', { n: place });
+  $('#res-sub').textContent = t('res.sub', { track: s.def.name, car: carById(sel.car).name, skill: SKILLS[sel.skill].label });
   $('#res-time').textContent = formatTime(s.player.finishTime);
   $('#res-lap').textContent = formatTime(Math.min(...s.player.lapTimes));
   $('#res-drift').textContent = s.player.drift.total.toLocaleString();
   $('#res-combo').textContent = s.player.drift.best.toLocaleString();
   const badges = [];
-  if (newBest) badges.push('🏁 트랙 신기록!');
-  if (unlocked) badges.push(`🔓 ${carById(unlocked).name} 잠금 해제!`);
+  if (newBest) badges.push(t('res.newBest'));
+  if (unlocked) badges.push(t('res.unlocked', { car: carById(unlocked).name }));
   $('#res-badge').hidden = badges.length === 0;
   $('#res-badge').textContent = badges.join('  ');
   show('#hud', false);
@@ -514,12 +523,12 @@ function statBar(label, v) {
 }
 
 function renderMenu() {
-  $('#track-list').innerHTML = TRACKS.map((t, i) => {
-    const best = save.best[t.id];
+  $('#track-list').innerHTML = TRACKS.map((tr, i) => {
+    const best = save.best[tr.id];
     return `<button class="card ${i === sel.track ? 'on' : ''}" data-track="${i}">
-      <strong>${t.name}</strong>
-      <span>${t.difficulty} · ${t.laps}랩${t.theme.weather === 'rain' ? ' · 빗길' : ''}</span>
-      <em>${best ? `베스트 ${formatTime(best)}` : '기록 없음'}</em>
+      <strong>${tr.name}</strong>
+      <span>${tr.difficulty} · ${t('menu.laps', { n: tr.laps })}${tr.theme.weather === 'rain' ? ` · ${t('menu.rain')}` : ''}</span>
+      <em>${best ? t('menu.best', { t: formatTime(best) }) : t('menu.noRecord')}</em>
     </button>`;
   }).join('');
 
@@ -529,11 +538,11 @@ function renderMenu() {
       <span class="swatch" style="--c:#${c.color.toString(16).padStart(6, '0')}"></span>
       <strong>${c.name}</strong>
       <span>${c.class}</span>
-      ${statBar('속도', (c.maxSpeed - 34) / 16)}
-      ${statBar('가속', (c.accel - 12) / 9)}
-      ${statBar('핸들링', (c.turnRate - 1.4) / 0.5)}
-      ${statBar('드리프트', (c.nitroGain - 0.8) / 0.4)}
-      ${open ? '' : '<em class="lock">🔒 Hard 라이벌에게 1승</em>'}
+      ${statBar(t('stat.speed'), (c.maxSpeed - 34) / 16)}
+      ${statBar(t('stat.accel'), (c.accel - 12) / 9)}
+      ${statBar(t('stat.handling'), (c.turnRate - 1.4) / 0.5)}
+      ${statBar(t('stat.drift'), (c.nitroGain - 0.8) / 0.4)}
+      ${open ? '' : `<em class="lock">${t('menu.lock')}</em>`}
     </button>`;
   }).join('');
 
@@ -594,9 +603,43 @@ $('#btn-quit').addEventListener('click', toMenu);
 $('#btn-again').addEventListener('click', startRace);
 $('#btn-menu').addEventListener('click', toMenu);
 
-$('#controls-hint').textContent = coarse
-  ? '왼쪽/오른쪽 누르기 = 조향(짧게 탭하면 살짝) · 위로 쓸어올리기 = 니트로 · 양쪽 동시에 = 브레이크 · GO 직전 터치 = 출발 부스터 · 드리프트 후 코너를 빠져나오며 손을 떼면 순간 부스터 · 노란 화살표를 밟으면 대시'
-  : '←/→ 또는 A/D 조향 · ↓ 브레이크 · Space 니트로 · P 일시정지 — 코너에서 꺾으면 드리프트, 드리프트로 니트로 충전 · GO 직전 ↑/Space = 출발 부스터 · 드리프트 후 코너를 빠져나오며 핸들을 풀면 순간 부스터 · 노란 화살표를 밟으면 대시';
+$('#controls-hint').textContent = t(coarse ? 'hint.touch' : 'hint.keys');
+
+$('#btn-lang').addEventListener('click', () => {
+  const next = getLang() === 'ko' ? 'en' : 'ko';
+  // A ?lang= in the URL would override the saved choice on reload, so drop it
+  // once saved; with storage blocked the URL carries the choice instead.
+  const url = new URL(location.href);
+  // Keep the track/car/rival picked in the menu: save them like a race start
+  // would, and update any ?track=&car=&skill= that would otherwise restore
+  // older picks (or carry them in the URL when storage is blocked).
+  save.last = { track: TRACKS[sel.track].id, car: sel.car, skill: sel.skill };
+  const stored = writeSave(save);
+  for (const [k, v] of Object.entries(save.last)) if (!stored || url.searchParams.has(k)) url.searchParams.set(k, v);
+  if (saveLang(next)) url.searchParams.delete('lang');
+  else url.searchParams.set('lang', next);
+  if (url.search === location.search) location.reload();
+  else location.replace(url);
+});
+
+// Portals such as itch.io run the game in an iframe on their own file host,
+// where the landing page is not part of the upload: point "about" at the public
+// web build in a new tab instead. (The landing page's own ?embed=1 demo hides it.)
+const PUBLIC_URL = 'https://jeiel85.github.io/drift-duel/';
+const framed = (() => {
+  try {
+    return window.top !== window.self;
+  } catch {
+    return true;
+  }
+})();
+if (framed && !embedded) {
+  const about = $('#link-about');
+  about.href = PUBLIC_URL;
+  about.target = '_blank';
+  about.rel = 'noopener';
+  about.textContent += ' ↗';
+}
 
 // ---------------------------------------------------------------- WebGL context loss
 // Phones reclaim GPU memory (backgrounding, memory pressure). three.js rebuilds its
@@ -642,7 +685,7 @@ function frame(now) {
     errorLog.record('frame', err);
     audio.suspend();
     keepAwake(false);
-    showError('문제가 생겨 멈췄어요', '게임 진행 중 오류가 발생했어요. 다시 시작하거나, 신고해 주시면 고칠게요.');
+    showError(t('err.crashTitle'), t('err.crashMsg'));
   }
 }
 
@@ -658,7 +701,7 @@ function tick(now) {
     s.countdown -= dt;
     if (pressed && !s.start) {
       s.start = judgeStart(s.countdown);
-      if (s.start === 'early') boostPop('너무 빨라요!', 0, true);
+      if (s.start === 'early') boostPop(t('pop.early'), 0, true);
     }
     input.read(); // drop nitro taps made during the countdown so none fires at GO
     const n = Math.ceil(s.countdown);
@@ -669,7 +712,7 @@ function tick(now) {
       haptic(40);
       if (s.start === 'boost') {
         kick(s.player.car, START_KICK);
-        boostPop('출발 부스터!', 40);
+        boostPop(t('pop.start'), 40);
       }
     }
   } else if (goTimer > 0) {

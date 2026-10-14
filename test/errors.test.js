@@ -1,5 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildReportUrl, createErrorLog, ISSUE_URL } from '../src/game/errors.js';
+import { setLang } from '../src/i18n.js';
+
+// The report text follows the UI language; these cases check the Korean one.
+beforeAll(() => setLang('ko'));
+afterAll(() => setLang('en'));
 
 describe('error log', () => {
   it('keeps only the most recent entries', () => {
@@ -53,6 +58,22 @@ describe('buildReportUrl', () => {
     const body = new URL(buildReportUrl({ version: '1', userAgent: 'ua', entries })).searchParams.get('body');
     expect(body.length).toBeLessThanOrEqual(1800 + 10);
     expect(body.endsWith('…(잘림)')).toBe(true);
+  });
+
+  it('is written in English when the UI is', () => {
+    setLang('en');
+    try {
+      const url = new URL(buildReportUrl({ version: '1.2.3', userAgent: 'ua' }));
+      expect(url.searchParams.get('title')).toBe('[Bug] Game error');
+      const body = url.searchParams.get('body');
+      for (const s of ['### What happened?', 'Version: 1.2.3', '(none recorded)']) expect(body).toContain(s);
+      const long = Array.from({ length: 5 }, () => ({ kind: 'error', message: 'x'.repeat(300), stack: 's'.repeat(600) }));
+      const capped = new URL(buildReportUrl({ version: '1', userAgent: 'ua', entries: long })).searchParams.get('body');
+      expect(capped.length).toBeLessThanOrEqual(1800);
+      expect(capped.endsWith('…(truncated)')).toBe(true);
+    } finally {
+      setLang('ko');
+    }
   });
 
   it('works with no errors recorded', () => {
