@@ -3,6 +3,8 @@ dist/
 *.log
 .DS_Store
 dist-app/
+dist-itch/
+release/
 
 # Release signing - never commit (backed up to Google Drive)
 .keystore/

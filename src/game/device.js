@@ -22,10 +22,16 @@ export function haptic(pattern) {
 /** Hide the browser chrome on phones. Must be called from a user gesture. */
 export function enterFullscreen() {
   const el = document.documentElement;
-  if (isNative() || document.fullscreenElement || !el.requestFullscreen) return;
-  el.requestFullscreen({ navigationUI: 'hide' }).catch(() => {
-    // Denied (e.g. inside an iframe without allowfullscreen): keep playing windowed.
-  });
+  // fullscreenEnabled is false inside an iframe without allowfullscreen (e.g. a
+  // game portal embed, which offers its own fullscreen button instead).
+  if (isNative() || document.fullscreenElement || !el.requestFullscreen || document.fullscreenEnabled === false) return;
+  try {
+    Promise.resolve(el.requestFullscreen({ navigationUI: 'hide' })).catch(() => {
+      // Denied (no user gesture, browser policy): keep playing windowed.
+    });
+  } catch {
+    // Older engines may throw instead of rejecting; fullscreen is optional.
+  }
 }
 
 let wakeLock = null;

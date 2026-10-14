@@ -659,3 +659,19 @@ body {
 body.native .back {
   display: none;
 }
+
+/* Language switch next to the mute button in the menu header. */
+.lang-btn {
+  margin-left: auto;
+  margin-right: 8px;
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: rgba(0, 0, 0, 0.45);
+  font-size: 13px;
+  font-weight: 700;
+}
+.brand .lang-btn + .icon-btn {
+  margin-left: 0;
+}

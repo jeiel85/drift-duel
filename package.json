@@ -15,6 +15,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "build:app": "vite build --outDir dist-app && node scripts/app-index.mjs",
+    "build:itch": "vite build --outDir dist-itch && node scripts/app-index.mjs dist-itch",
+    "pack:itch": "npm run build:itch && node scripts/pack-itch.mjs",
     "android:sync": "npm run build:app && cap sync android",
     "android:apk": "npm run android:sync && cd android && gradlew assembleRelease bundleRelease",
     "android:apk:debug": "npm run android:sync && cd android && gradlew assembleDebug",

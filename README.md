@@ -32,6 +32,7 @@
 | 🏎️ **자동차 4종** | Street · Muscle · Off-Road · Super. Super(Zenith R)는 Hard 라이벌을 한 번 이기면 열려요. |
 | 🧭 **주행 보조** | 터치용 보조(기본 켜짐). 짧은 탭은 살짝, 길게 누르면 크게 꺾이고, 미끄러짐 각도 상한으로 스핀을 막고, 벽 쪽으로 향하면 살짝 되돌려요. |
 | 📳 **폰에 맞춘 경험** | 진동 피드백, 전체 화면, 화면 꺼짐 방지, 프레임이 떨어지면 해상도→그림자 순으로 자동 화질 조절. |
+| 🌐 **한국어 / English** | 브라우저 언어를 따라 시작하고, 메뉴 오른쪽 위 **English / 한국어** 버튼으로 바꿔요. `play.html?lang=en`처럼 주소로 정할 수도 있어요. |
 | 💾 **기록 저장** | 트랙별 최고 기록, 승수, 해금 상태를 브라우저(localStorage)에 저장해요. |
 | 🔊 **합성 사운드** | Web Audio로 엔진음과 타이어 스키드 소리를 실시간 합성해요(음소거 가능). |
 | 📦 **에셋 0개** | 텍스처를 전부 캔버스로 절차 생성해서 이미지·사운드 파일이 없어요. |
@@ -70,6 +71,20 @@ on/off 조향만 하고 150ms 늦게 반응하는 "엄지 플레이어"를 시�
 - **AI** ([`src/game/ai.js`](src/game/ai.js)) — 속도에 비례하는 전방 주시점을 따라가고, 앞쪽 곡률로 코너 진입 속도를 계산해 브레이크를 밟아요.
   역조향으로 미끄러짐을 잡아요.
 - **렌더링** ([`src/render/`](src/render)) — Three.js. 트랙은 리본 메시, 소품은 InstancedMesh, 스키드 마크는 풀링된 인스턴스예요.
+
+## itch.io (HTML5)
+
+```bash
+npm run pack:itch   # dist-itch/ 빌드(게임 화면이 index.html) → release/drift-duel-itch.zip
+```
+
+itch.io는 업로드한 zip을 다른 도메인(itch.zone)의 iframe 안에서 실행해요. 그래서 iframe 안에서는 이렇게 동작해요.
+
+- 메뉴의 소개 페이지 링크는 업로드에 소개 페이지가 없으니 새 탭으로 웹 버전(GitHub Pages)을 열어요.
+- 전체 화면·화면 꺼짐 방지가 막혀 있으면 건너뛰고 창 모드로 계속해요(itch의 Fullscreen 버튼을 쓰면 돼요).
+- 저장소(localStorage)가 막혀 있어도 게임은 그대로 돌고, 언어 선택은 주소의 `?lang=`으로 이어 가요. 기록은 웹 버전과 따로 저장돼요.
+
+등록 설정, 소개문, 커버 이미지는 [`docs/itch/`](docs/itch/README.md)에 있어요.
 
 ## Android 앱 (APK)
 
@@ -117,6 +132,7 @@ npm test         # Vitest: 트랙 형상, 물리, 랩 계산, 드리프트 점�
 npm run test:e2e # Playwright: 실제 브라우저(데스크톱·모바일)에서 레이스·터치·랜딩·복구 흐름
 npm run build    # dist/ 에 정적 사이트 생성
 npm run preview  # 빌드 결과 미리보기
+npm run pack:itch # itch.io 업로드용 zip(release/drift-duel-itch.zip)
 ```
 
 `play.html`은 URL 파라미터로 바로 시작할 수 있어요. 예: `play.html?track=neon&car=bruiser&skill=hard&autostart=1`
@@ -128,7 +144,8 @@ index.html            소개 페이지(모바일: 포스터 → 전체 화면 �
 play.html             게임
 android/              Capacitor Android 프로젝트(네이티브 셸)
 capacitor.config.json 앱 ID·이름·웹 번들 경로
-scripts/app-index.mjs 앱 빌드에서 게임 화면을 index.html로 만드는 스크립트
+scripts/app-index.mjs 앱·itch 빌드에서 게임 화면을 index.html로 만드는 스크립트
+scripts/pack-itch.mjs itch.io 업로드용 zip을 만드는 스크립트(의존성 없음)
 src/
   game/               렌더링과 무관한 순수 로직 — 모두 단위 테스트 대상
     physics.js        차량 물리, 벽 충돌
@@ -142,6 +159,7 @@ src/
     audio.js          Web Audio 합성음
     storage.js        기록 저장
   render/             Three.js 씬 구성(월드, 차량, 이펙트, 텍스처)
+  i18n.js             한국어·영어 UI 문자열과 언어 선택
   play.js             게임 루프와 화면 흐름
 test/                 Vitest 테스트
 ```
@@ -154,6 +172,7 @@ test/                 Vitest 테스트
 - 모든 트랙 × 모든 차 조합에서 Hard AI가 벽에 거의 부딪히지 않고 완주해요. Easy는 Hard보다 확실히 느려요.
 - 주행 보조를 켜면 길게 꺾어도 스핀하지 않고, 짧은 탭은 작은 보정이 되고, 엄지 플레이어가 모든 트랙을 벽 충돌 1회 이하로 완주해요.
 - 벽에 끼어 2.5초 넘게 못 움직이면 같은 위치의 트랙 중앙으로 복귀해요. 카운트다운처럼 입력이 없을 때는 동작하지 않아요.
+- 한국어와 영어 문자열 표의 키와 `{자리표시자}`가 같고, 화면·코드가 쓰는 키가 모두 있고, 게임 코드에 하드코딩된 한국어가 없어요.
 - 손상된 저장 데이터, 거부되거나 iOS에서 중단된 오디오, AudioContext 생성 실패가 게임을 멈추지 않아요.
 
 E2E 테스트(`e2e/`)가 실제 브라우저에서 확인하는 것:
@@ -162,6 +181,7 @@ E2E 테스트(`e2e/`)가 실제 브라우저에서 확인하는 것:
 - **터치:** 탭과 홀드 조향, 쓸어올리기 니트로, 양쪽 브레이크, 조작 안내
 - **모바일 랜딩:** 넘침 없음, 44px 터치 영역, 고정 버튼, 포스터 → 게임 이동
 - **복구와 안정성:** WebGL 컨텍스트 손실 후 복구, 게임 루프 오류 시 신고 화면, 손상된 저장 데이터
+- **언어와 iframe:** 영어 화면에 한국어가 남지 않음, 언어 전환과 저장, 저장소가 막혔을 때 `?lang=`으로 전환, iframe 안에서 소개 링크가 웹 버전으로 열림
 
 로컬에서는 설치된 Chrome을 쓰고, CI는 Playwright Chromium을 설치해 같은 테스트를 돌려요.
 

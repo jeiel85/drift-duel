@@ -2,6 +2,8 @@
 // device and let the player file a pre-filled GitHub issue when something breaks.
 // Nothing is sent anywhere unless the player opens the report link themselves.
 
+import { t } from '../i18n.js';
+
 export const ISSUE_URL = 'https://github.com/jeiel85/drift-duel/issues/new';
 const MAX_ENTRIES = 5;
 const MAX_BODY = 1800; // keep the URL well under browser/GitHub limits
@@ -33,21 +35,24 @@ export function createErrorLog() {
 /** Link to a new GitHub issue pre-filled with what the player was doing and the recent errors. */
 export function buildReportUrl({ version, userAgent, context = {}, entries = [] }) {
   const lines = [
-    '### 무슨 일이 있었나요?',
-    '(어떤 화면에서 무엇을 하다가 문제가 생겼는지 적어 주세요)',
+    t('report.what'),
+    t('report.whatHint'),
     '',
-    '### 자동 수집 정보',
-    `- 버전: ${version}`,
-    `- 기기/브라우저: ${userAgent}`,
+    t('report.auto'),
+    `- ${t('report.version')}: ${version}`,
+    `- ${t('report.device')}: ${userAgent}`,
     ...Object.entries(context).map(([k, v]) => `- ${k}: ${v}`),
     '',
-    '### 최근 오류',
+    t('report.recent'),
     ...(entries.length
       ? entries.map((e) => `- [${e.kind}] ${e.message}${e.stack ? `\n\`\`\`\n${e.stack}\n\`\`\`` : ''}`)
-      : ['- (기록 없음)']),
+      : [`- ${t('report.none')}`]),
   ];
   let body = lines.join('\n');
-  if (body.length > MAX_BODY) body = `${body.slice(0, MAX_BODY)}\n…(잘림)`;
-  const title = `[버그] ${entries.at(-1)?.message.slice(0, 80) ?? '게임 오류'}`;
+  if (body.length > MAX_BODY) {
+    const cut = `\n${t('report.cut')}`;
+    body = `${body.slice(0, MAX_BODY - cut.length)}${cut}`;
+  }
+  const title = t('report.title', { msg: entries.at(-1)?.message.slice(0, 80) ?? t('report.untitled') });
   return `${ISSUE_URL}?${new URLSearchParams({ title, body, labels: 'bug' })}`;
 }

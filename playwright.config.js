@@ -14,6 +14,8 @@ export default defineConfig({
   reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : 'list',
   use: {
     baseURL: `http://localhost:${PORT}/`,
+    // The flows below read the Korean UI; e2e/i18n.spec.js covers English.
+    locale: 'ko-KR',
     // Local runs use the installed Chrome; CI installs Playwright's Chromium.
     channel: process.env.CI ? undefined : 'chrome',
     launchOptions: { args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] },
