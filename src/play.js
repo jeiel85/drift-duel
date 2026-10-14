@@ -610,6 +610,12 @@ $('#btn-lang').addEventListener('click', () => {
   // A ?lang= in the URL would override the saved choice on reload, so drop it
   // once saved; with storage blocked the URL carries the choice instead.
   const url = new URL(location.href);
+  // Keep the track/car/rival picked in the menu: save them like a race start
+  // would, and update any ?track=&car=&skill= that would otherwise restore
+  // older picks (or carry them in the URL when storage is blocked).
+  save.last = { track: TRACKS[sel.track].id, car: sel.car, skill: sel.skill };
+  const stored = writeSave(save);
+  for (const [k, v] of Object.entries(save.last)) if (!stored || url.searchParams.has(k)) url.searchParams.set(k, v);
   if (saveLang(next)) url.searchParams.delete('lang');
   else url.searchParams.set('lang', next);
   if (url.search === location.search) location.reload();

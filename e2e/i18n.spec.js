@@ -27,8 +27,15 @@ test('English UI has no Korean left, and the switch goes to Korean and stays', a
   const aria = await page.evaluate(() => [...document.querySelectorAll('[aria-label]:not(#btn-lang)')].map((e) => e.getAttribute('aria-label')));
   expect(aria.filter((a) => HANGUL.test(a))).toEqual([]);
 
+  // Menu picks survive the language reload.
+  await page.locator('[data-track="1"]').click();
+  await page.locator('[data-car="bruiser"]').click();
+  await page.locator('[data-skill="hard"]').click();
   await page.locator('#btn-lang').click();
   await expect(page.locator('#btn-start')).toHaveText('레이스 시작');
+  await expect(page.locator('#track-list .card.on')).toContainText('Red Canyon');
+  await expect(page.locator('#car-list .card.on')).toContainText('Bruiser V8');
+  await expect(page.locator('#skill-list .on')).toHaveText('Hard');
   expect(new URL(page.url()).searchParams.get('lang')).toBeNull(); // saved, so the URL is clean
   await page.reload();
   await expect(page.locator('#btn-lang')).toHaveText('English');
@@ -43,11 +50,15 @@ test('with storage blocked the language switch still works through the URL', asy
       throw new DOMException('blocked', 'SecurityError');
     };
   });
-  await page.goto('play.html?lang=ko');
+  await page.goto('play.html?lang=ko&track=harbor');
   await expect(page.locator('#btn-start')).toHaveText('레이스 시작');
+  await page.locator('[data-track="2"]').click();
   await page.locator('#btn-lang').click();
   await expect(page.locator('#btn-start')).toHaveText('Start race');
-  expect(new URL(page.url()).searchParams.get('lang')).toBe('en');
+  const params = new URL(page.url()).searchParams;
+  expect(params.get('lang')).toBe('en');
+  expect(params.get('track')).toBe('neon');
+  await expect(page.locator('#track-list .card.on')).toContainText('Neon Rain');
 });
 
 test('inside a portal iframe the about link opens the public web build', async ({ page }) => {
