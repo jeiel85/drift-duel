@@ -1,3 +1,5 @@
+import { registerServiceWorker } from './pwa.js';
+
 // Phones get a light poster that opens the full-screen game (a tiny iframe is
 // awkward to play and fights page scrolling). Desktop swaps in the live game.
 const screen = document.querySelector('#demo-screen');
@@ -43,3 +45,5 @@ installBtn.addEventListener('click', async () => {
   installBtn.hidden = true;
 });
 window.addEventListener('appinstalled', () => (installBtn.hidden = true));
+
+registerServiceWorker();
