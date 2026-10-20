@@ -16,6 +16,7 @@ import { createSkids, createSmoke, createSpeedLines } from './render/effects.js'
 import { createSpeedOverlay } from './render/speedOverlay.js';
 import { buildWorld } from './render/world.js';
 import { applyStatic, getLang, saveLang, t } from './i18n.js';
+import { registerServiceWorker } from './pwa.js';
 
 const $ = (sel) => document.querySelector(sel);
 const FIXED_DT = 1 / 120;
@@ -762,3 +763,5 @@ if (import.meta.env.DEV) {
   };
 }
 requestAnimationFrame(frame);
+
+registerServiceWorker();

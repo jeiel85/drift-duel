@@ -13,6 +13,7 @@ if (existsSync(manifestPath)) {
   manifest.start_url = './index.html';
   writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
 }
-// Landing-only assets are not needed without the landing page.
-for (const f of ['og.jpg', 'demo-poster.jpg']) rmSync(`${dir}/${f}`, { force: true });
+// Landing-only assets are not needed without the landing page, and the offline
+// service worker is only registered by the GitHub Pages build.
+for (const f of ['og.jpg', 'demo-poster.jpg', 'sw.js']) rmSync(`${dir}/${f}`, { force: true });
 console.log(`${dir}/index.html is the game`);

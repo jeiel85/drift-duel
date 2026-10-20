@@ -5,10 +5,13 @@ import { defineConfig } from 'vite';
 const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8'));
 
 // Relative base so the build works under https://<user>.github.io/drift-duel/
-export default defineConfig({
+export default defineConfig(({ command, mode }) => ({
   base: './',
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
+    // The offline service worker is only for the GitHub Pages web build. The native
+    // app (--mode app) and the itch.io upload (--mode itch) never register it.
+    __PWA_SW__: JSON.stringify(command === 'build' && mode === 'production'),
   },
   build: {
     // three.js alone is ~550 kB minified (~145 kB gzip) and is split into its own chunk.
@@ -30,4 +33,4 @@ export default defineConfig({
   test: {
     include: ['test/**/*.test.js'],
   },
-});
+}));
